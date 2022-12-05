@@ -1,11 +1,11 @@
 // adjust range of servo movements
-var l = [$prop('Settings.LeftOffset')];
+var l = [$prop('Settings.LeftShoulderMin')];
 var r = [$prop('Settings.RightOffset')];
 const zero = [0];	// offset adjust control codes
 const one = [1];
 var two = [2];		// most slack control values
 var three = [3];
-if ($prop('Settings.max_test')) {
+if ($prop('Settings.TestMinTensions')) {
   two = 126 & $prop('Settings.tmax'); // most tense control values
   three = 1 + two;
 }  
