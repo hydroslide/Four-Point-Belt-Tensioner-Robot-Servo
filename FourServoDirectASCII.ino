@@ -1,32 +1,23 @@
-
-
-/*Mover = output "Binary" et "10bits"
-Arduino = Byte Data[2]
-Data[0] = Serial.read();
-Data[1] = Serial.read();
-result = (Data[0] * 256 + Data[1]);
-
-OU
-
-Mover = output "Binary" et "8bits"
-Arduino = Byte Data
-Data = Serial.read(); on obtient directement le résultat*/
-
 #include <Servo.h>  // local library "Servo.h"
+
+bool shouldDebug = true;
 
 const byte nbServos = 4;
 
-const byte leftShoulderCtl = 252;
-const byte rightShoulderCtl = 253;
-const byte leftWaistCtl = 254;
-const byte rightWaistCtl = 255;
+const byte leftShoulderCtl = 0;
+const byte rightShoulderCtl = 1;
+const byte leftWaistCtl = 2;
+const byte rightWaistCtl = 3;
+const byte above127Ctl = 4;
 
-const byte maxVal = 251;
+const byte maxVal = 250;
+
+bool isAbove127 = false;
 
 // create servo objects to control any servo
 Servo myServo[nbServos];
-const byte servoPin[nbServos] = {3,5,6,9};  // digital pins (not necessarily ~pwm)
-const byte inversion[nbServos] = {1, 1, 0, 0 }; // parameter to change if a servo goes the wrong way
+const byte servoPin[nbServos] = {3,4,5,6};  // digital pins (not necessarily ~pwm)
+const byte inversion[nbServos] = {0, 0, 0, 0 }; // parameter to change if a servo goes the wrong way
 int OldSerialValue[nbServos] = {0, 0, 0, 0};
 //int NewSerialValue[nbServos] = {0, 0, 0, 0};
 
@@ -35,7 +26,7 @@ int servoHomeDegrees[nbServos] = { 0, 0, 0, 0}; //will be updated with the initi
 int servoMaxDegrees[nbServos] = { 180,180,180,180}; // leftthigh, rightthigh, leftside, rightside
 int currentServoIndex = 0;
 
-const byte deadZone = 0;
+const byte deadZone = 2;
 
 
 
@@ -46,15 +37,14 @@ void setup()
   // attach the Servos to the pins
   for (byte i = 0; i < nbServos; i++) {
     // pinMode(servoPin[i], OUTPUT); // done within the library
-    myServo[i].attach(servoPin[i]);  // attaches the servo on servoPin pin
+    myServo[i].attach(servoPin[i],500,2500);  // attaches the servo on servoPin pin
     }
   // move the servos to signal startup
   MoveAllServosMaxtoDegrees(maxVal); // Max
   delay(2000);
   // send all servos to home
   MoveAllServosMaxtoDegrees(0);
-  delay(2000);
-  MoveAllServosMaxtoDegrees(127);
+  // delay(2000);
 }
 
 void loop()
@@ -65,17 +55,31 @@ void loop()
   {
 //    bufferPrevious = bufferCurrent; // Store previous byte
     byte bufferCurrent = Serial.read(); // Get the new byte
-    if (bufferCurrent > maxVal){
-      currentServoIndex = bufferCurrent-(maxVal+1);
-      Debug("Got a control character: "+(String)bufferCurrent+", currentServoIndex: "+(String)currentServoIndex);
+
+    if (isAbove127 == true){        
+        Debug("Got a Buffer: "+(String)bufferCurrent+" isAbove127 is set. New Value: "+(String)(bufferCurrent + 128));
+        bufferCurrent += 128;
+        isAbove127 = false;
+    }
+
+    if (bufferCurrent <= 4){
+      if (bufferCurrent == above127Ctl){
+        Debug("Got a control character: "+(String)bufferCurrent+". Setting Above 127 to true");
+        isAbove127 = true;
+      }
+      else{
+        currentServoIndex = bufferCurrent;
+        Debug("Got a control character: "+(String)bufferCurrent+", currentServoIndex: "+(String)currentServoIndex);
+      }
     }
     else
-    {   
+    { 
+      bufferCurrent -= 5;        
       Debug("Got a value. Gonna set servo: "+(String)currentServoIndex+" to "+(String)bufferCurrent);
       //NewSerialValue[currentServoIndex] = bufferCurrent;
       if (abs(OldSerialValue[currentServoIndex] - bufferCurrent) > deadZone) {
-      sendServoSetpointMaxtoDegrees(currentServoIndex, CheckForInversion(bufferCurrent, currentServoIndex));
-      OldSerialValue[currentServoIndex] = bufferCurrent;
+        sendServoSetpointMaxtoDegrees(currentServoIndex, CheckForInversion(bufferCurrent, currentServoIndex));
+        OldSerialValue[currentServoIndex] = bufferCurrent;
     }
     }
   }
@@ -107,8 +111,6 @@ void MoveAllServosMaxtoDegrees( int target)
     sendServoSetpointMaxtoDegrees(i, CheckForInversion(target, i));
   }
 }
-
-bool shouldDebug = true;
 
 void Debug(String msg){
   if (shouldDebug)
