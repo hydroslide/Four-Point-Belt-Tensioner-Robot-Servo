@@ -349,7 +349,7 @@
               "Expression": ""
             },
             "IsVisible": true,
-            "Label": "decel gain",
+            "Label": "Decel Gain",
             "IsVisibleFormula": {
               "Expression": ""
             }
@@ -366,7 +366,24 @@
               "Expression": ""
             },
             "IsVisible": true,
-            "Label": "delta yaw gain",
+            "Label": "Yaw Gain",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 80,
+            "Minimum": 0,
+            "PropertyName": "heave_gain",
+            "CurrentValue": 13,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Heave Gain",
             "IsVisibleFormula": {
               "Expression": ""
             }
@@ -383,7 +400,7 @@
               "Expression": ""
             },
             "IsVisible": true,
-            "Label": "smoothing",
+            "Label": "Smoothing",
             "IsVisibleFormula": {
               "Expression": ""
             }

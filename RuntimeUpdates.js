@@ -3,10 +3,15 @@ var rsn = [$prop('Settings.RightShoulderNeutral')];
 var lwn = [$prop('Settings.LeftWaistNeutral')];
 var rwn = [$prop('Settings.RightWaistNeutral')];
 
-var lsm = [$prop('Settings.LeftShoulderMax')];
-var rsm = [$prop('Settings.RightShoulderMax')];
-var lwm = [$prop('Settings.LeftWaistMax')];
-var rwm = [$prop('Settings.RightWaistMax')];
+var lsMax = [$prop('Settings.LeftShoulderMax')];
+var rsMax = [$prop('Settings.RightShoulderMax')];
+var lwMax = [$prop('Settings.LeftWaistMax')];
+var rwMax = [$prop('Settings.RightWaistMax')];
+
+var lsMin = [$prop('Settings.LeftShoulderMin')];
+var rsMin = [$prop('Settings.RightShoulderMin')];
+var lwMin = [$prop('Settings.LeftWaistMin')];
+var rwMin = [$prop('Settings.RightWaistMin')];
 
 var ctlCount = 5;
 var valCount = 255 - ctlCount;
@@ -16,11 +21,11 @@ var rsCtl = 1;
 var lwCtl = 2;
 var rwCtl = 3;
 
-function calcAbsFromPct(pct){
+function calcAbsFromPct(pct) {
   return (pct / 100) * (valCount);
 }
 
-function getCommandValFromAbs(abs){
+function getCommandValFromAbs(abs) {
   return abs + ctlCount;
 }
 
@@ -29,7 +34,7 @@ var rsnPos = calcAbsFromPct(rsn);
 var lwnPos = calcAbsFromPct(lwn);
 var rwnPos = calcAbsFromPct(rwn);
 
-function concatCommand(command, servoIndex, val){
+function concatCommand(command, servoIndex, val) {
   var above127Ctl = 4;
   command = command.concat(String.fromCharCode(servoIndex));
   if (val > 127) {
@@ -41,7 +46,7 @@ function concatCommand(command, servoIndex, val){
   return command;
 }
 
-function applyNeutralOffset(offsetPos, decimalValue){
+function applyNeutralOffset(offsetPos, decimalValue) {
   decimalValue = Math.max(Math.min(decimalValue, 1), -1);
   var posValue = offsetPos;
   if (decimalValue > 0) {
@@ -52,76 +57,99 @@ function applyNeutralOffset(offsetPos, decimalValue){
   return posValue;
 }
 
-function getMaxTensionPos(offsetPos, maxVal){
+function getMaxTensionPos(offsetPos, maxVal) {
   return applyNeutralOffset(offsetPos, (maxVal / 100));
 }
 
+function getMinTensionPos(offsetPos, minVal) {
+  return applyNeutralOffset(offsetPos, (minVal / 100) * -1);
+}
+
+function SmoothItOut(servoName, val) {
+  // Low-pass IIR filtering of left and right tension values
+  var key = servoName + 'B4';
+  if (null == root[key]) {
+    root[key] = val;	// initialize
+  }
+  var valB4 = root[key]; // previously filtered values
+  var tc = 1 + $prop('Settings.smooth');
+  valB4 += (val - valB4) / tc;
+  root[key] = valB4;
+  return valB4;
+}
+
+function ApplyMaxMin(val, minVal, maxVal) {
+  if (val > 0)
+    return val * maxVal;
+  else
+    return val * minVal;
+}
+
 // G-forces from SimHub properties
-var Gy = - $prop('AccelerationSway');	// lateral (yaw) acceleration
-var Gs = - $prop('GlobalAccelerationG');	// deceleration
-var tmax = $prop('Settings.tmax') & 126;	// limit servos
-Gy *= $prop('Settings.yaw_gain');
-Gs *= $prop('Settings.decel_gain');
-if (0 > Gs)
-  Gs = 0;				// non-negative deceleration
-/*  
-else if (tmax < Gs)
-  $prop('Settings.decel_gain') *= Math.round(tmax/Gs - 0.5);	// unsupported..
- */
+var gforce_x = - $prop('AccelerationSway');	// lateral (yaw) acceleration
+var gforce_y = - $prop('GlobalAccelerationG');	// deceleration
+var gforce_z = $prop('AccelerationHeave');
+
+gforce_x *= $prop('Settings.yaw_gain');
+gforce_y *= $prop('Settings.decel_gain');
+gforce_z *= $prop('Settings.heave_gain');
+
+
+// if (0 > gforce_y)
+//   gforce_y = 0;				// non-negative deceleration
+
+
+var lsVal = 0;
+var rsVal = 0;
+var lwVal = 0;
+var rwVal = 0;
+
 // convert speed and yaw changes to left and right tension values
 // turning right should increase right harness tension (body pushed left)
-var r = Math.sqrt(Gs*Gs + Gy*Gy);
-var l = Gs + Gs - r;
-if (0 > Gy) {
-  var t = r;	// negative Gy increases left tension
-  r = l;
-  l = t;
+var rs = Math.sqrt(gforce_y * gforce_y + gforce_x * gforce_x);
+var ls = gforce_y + gforce_y - rs;
+if (0 > gforce_x) {
+  var t = rs;	// negative gforce_x increases left tension
+  rs = ls;
+  ls = ts;
 }
 
-// Low-pass IIR filtering of left and right tension values
-if (null == root["lb4"]) {
-  root["rb4"] = r;  root["lb4"] = l;	// initialize
+var rw = Math.sqrt(gforce_z * gforce_z + gforce_x * gforce_x);
+var lw = gforce_z + gforce_z - rw;
+if (0 > gforce_x) {
+  var t = rw;	// negative gforce_x increases left tension
+  rw = lw;
+  lw = tw;
 }
-var rb4 = root["rb4"];
-var lb4 = root["lb4"]; // previously filtered values
-var tc = 1 + $prop('Settings.smooth');
-rb4 += (r - rb4) / tc;
-lb4 += (l - lb4) / tc;
-root["lb4"] = lb4;
-root["rb4"] = rb4;
 
-l = lb4; r = rb4; // filtered tensions;  comment out for unfiltered (or set Settings.smooth = 1)
-if (l > tmax)
-  l = tmax;
-else if (l < 2)
-  l = 2;
-l &= 0x7E;      // left lsb is 0
-tmax |= 1;
-if (r > tmax)
-  r = tmax;
-else if (r < 3)
-  r = 3;
-r |= 1;         // right lsb is 1
+// Normalize to a value between 0 and 1
+rsVal = rs / 100;
+lsVal = ls / 100;
+rwVal = rw / 100;
+lwVal = lw / 100;
 
-if ($prop('Settings.max_test') || $prop('Settings.TestOffsets')) {
-  // disable normal message output
-  // slider changes will provoke first message outputs
-  root["rb4"] = root["lb4"] = 0;  // reset IIR filters
-} else {
-//* servo control output
-  var ls = String.fromCharCode(l);      // tension control characters
-  var rs = String.fromCharCode(r);
-//*/
+// // Assign values to belts
+// // TODO: recombine the values the way you really want them. For now just put heave to waist for test
+// lsVal = l;
+// rsVal = r;
 
-/* gnuplot output **************************************
-  var s = $prop('SpeedMph');
-  var ls = l.toString();
-  var rs = r.toString();
-  var ss = s.toString();
-  var Gys = Gy.toString();
-  var Gss = Gs.toString();
-  rs = ls.concat('\	',rs,'\\\n');  // gnuplot columns
-  ls = ss.concat('\	'); 
-*/
-return ls.concat(rs);
-}
+
+lsVal = SmoothItOut("ls", lsVal);
+rsVal = SmoothItOut("rs", rsVal);
+lwVal = SmoothItOut("lw", lwVal);
+rwVal = SmoothItOut("rw", rwVal);
+
+lsVal = ApplyMaxMin(lsMin, lsMax, lsVal);
+rsVal = ApplyMaxMin(rsMin, rsMax, rsVal);
+lwVal = ApplyMaxMin(lwMin, lwMax, lwVal);
+rwVal = ApplyMaxMin(rwMin, rwMax, rwVal);
+
+var command = "";
+command = concatCommand(command, lsCtl, getCommandValFromAbs(applyNeutralOffset(lsnPos, lsVal)));
+command = concatCommand(command, rsCtl, getCommandValFromAbs(applyNeutralOffset(rsnPos, rsVal)));
+command = concatCommand(command, lwCtl, getCommandValFromAbs(applyNeutralOffset(lwnPos, lwVal)));
+command = concatCommand(command, rwCtl, getCommandValFromAbs(applyNeutralOffset(rwnPos, rwVal)));
+return command;
+
+
+
