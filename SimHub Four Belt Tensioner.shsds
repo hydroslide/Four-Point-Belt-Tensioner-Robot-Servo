@@ -5,13 +5,13 @@
   "IsConnecting": false,
   "IsEnabled": true,
   "LogIncomingData": true,
-  "IsConnected": false,
+  "IsConnected": true,
   "BaudRate": 115200,
   "UpdateMessages": [
     {
       "Message": {
         "Interpreter": 1,
-        "Expression": "var lsn = [$prop('Settings.LeftShoulderNeutral')];\r\nvar rsn = [$prop('Settings.RightShoulderNeutral')];\r\nvar lwn = [$prop('Settings.LeftWaistNeutral')];\r\nvar rwn = [$prop('Settings.RightWaistNeutral')];\r\n\r\nvar lsm = [$prop('Settings.LeftShoulderMax')];\r\nvar rsm = [$prop('Settings.RightShoulderMax')];\r\nvar lwm = [$prop('Settings.LeftWaistMax')];\r\nvar rwm = [$prop('Settings.RightWaistMax')];\r\n\r\nvar ctlCount = 5;\r\nvar valCount = 255 - ctlCount;\r\n\r\nvar lsCtl = 0;\r\nvar rsCtl = 1;\r\nvar lwCtl = 2;\r\nvar rwCtl = 3;\r\n\r\nfunction calcAbsFromPct(pct){\r\n  return (pct / 100) * (valCount);\r\n}\r\n\r\nfunction getCommandValFromAbs(abs){\r\n  return abs + ctlCount;\r\n}\r\n\r\nvar lsnPos = calcAbsFromPct(lsn);\r\nvar rsnPos = calcAbsFromPct(rsn);\r\nvar lwnPos = calcAbsFromPct(lwn);\r\nvar rwnPos = calcAbsFromPct(rwn);\r\n\r\nfunction concatCommand(command, servoIndex, val){\r\n  var above127Ctl = 4;\r\n  command = command.concat(String.fromCharCode(servoIndex));\r\n  if (val > 127) {\r\n    val -= 127;\r\n    command = command.concat(String.fromCharCode(above127Ctl));\r\n  }\r\n  val = Math.min(~~val, 127);\r\n  command = command.concat(String.fromCharCode(~~val));\r\n  return command;\r\n}\r\n\r\nfunction applyNeutralOffset(offsetPos, decimalValue){\r\n  decimalValue = Math.max(Math.min(decimalValue, -1), 1);\r\n  var posValue = offsetPos;\r\n  if (decimalValue > 0) {\r\n    posValue = offsetPos + ((valCount - offsetPos) * decimalValue)\r\n  } else if (decimalValue < 0) {\r\n    posValue = offsetPos - (offsetPos * Math.abs(decimalValue))\r\n  }\r\n  return posValue;\r\n}\r\n\r\nfunction getMaxTensionPos(offsetPos, maxVal){\r\n  return applyNeutralOffset(offsetPos, (maxVal / 100));\r\n}\r\n\r\nif ($prop('Settings.TestNeutralTensions')) {\r\n  var command = \"\";\r\n  command = concatCommand(command, lsCtl, getCommandValFromAbs(lsnPos));\r\n  command = concatCommand(command, rsCtl, getCommandValFromAbs(rsnPos));\r\n  command = concatCommand(command, lwCtl, getCommandValFromAbs(lwnPos));\r\n  command = concatCommand(command, rwCtl, getCommandValFromAbs(rwnPos));\r\n  return command;\r\n} else {//if ($prop('Settings.TestMaxTensions')) {\r\n  var command = \"\";\r\n  command = concatCommand(command, lsCtl, getCommandValFromAbs(getMaxTensionPos(lsnPos, lsm)));\r\n  command = concatCommand(command, rsCtl, getCommandValFromAbs(getMaxTensionPos(rsnPos, rsm)));\r\n  command = concatCommand(command, lwCtl, getCommandValFromAbs(getMaxTensionPos(lwnPos, lwm)));\r\n  command = concatCommand(command, rwCtl, getCommandValFromAbs(getMaxTensionPos(rwnPos, rwm)));\r\n  return command;\r\n}\r\n"
+        "Expression": "var lsn = [$prop('Settings.LeftShoulderNeutral')];\r\nvar rsn = [$prop('Settings.RightShoulderNeutral')];\r\nvar lwn = [$prop('Settings.LeftWaistNeutral')];\r\nvar rwn = [$prop('Settings.RightWaistNeutral')];\r\n\r\nvar lsm = [$prop('Settings.LeftShoulderMax')];\r\nvar rsm = [$prop('Settings.RightShoulderMax')];\r\nvar lwm = [$prop('Settings.LeftWaistMax')];\r\nvar rwm = [$prop('Settings.RightWaistMax')];\r\n\r\nvar ctlCount = 5;\r\nvar valCount = 255 - ctlCount;\r\n\r\nvar lsCtl = 0;\r\nvar rsCtl = 1;\r\nvar lwCtl = 2;\r\nvar rwCtl = 3;\r\n\r\nfunction calcAbsFromPct(pct){\r\n  return (pct / 100) * (valCount);\r\n}\r\n\r\nfunction getCommandValFromAbs(abs){\r\n  return abs + ctlCount;\r\n}\r\n\r\nvar lsnPos = calcAbsFromPct(lsn);\r\nvar rsnPos = calcAbsFromPct(rsn);\r\nvar lwnPos = calcAbsFromPct(lwn);\r\nvar rwnPos = calcAbsFromPct(rwn);\r\n\r\nfunction concatCommand(command, servoIndex, val){\r\n  var above127Ctl = 4;\r\n  command = command.concat(String.fromCharCode(servoIndex));\r\n  if (val > 127) {\r\n    val -= 127;\r\n    command = command.concat(String.fromCharCode(above127Ctl));\r\n  }\r\n  val = Math.min(~~val, 127);\r\n  command = command.concat(String.fromCharCode(~~val));\r\n  return command;\r\n}\r\n\r\nfunction applyNeutralOffset(offsetPos, decimalValue){\r\n  decimalValue = Math.max(Math.min(decimalValue, 1), -1);\r\n  var posValue = offsetPos;\r\n  if (decimalValue > 0) {\r\n    posValue = offsetPos + ((valCount - offsetPos) * decimalValue)\r\n  } else if (decimalValue < 0) {\r\n    posValue = offsetPos - (offsetPos * Math.abs(decimalValue))\r\n  }\r\n  return posValue;\r\n}\r\n\r\nfunction getMaxTensionPos(offsetPos, maxVal){\r\n  return applyNeutralOffset(offsetPos, (maxVal / 100));\r\n}\r\n\r\nif ($prop('Settings.TestNeutralTensions')) {\r\n  var command = \"\";\r\n  command = concatCommand(command, lsCtl, getCommandValFromAbs(lsnPos));\r\n  command = concatCommand(command, rsCtl, getCommandValFromAbs(rsnPos));\r\n  command = concatCommand(command, lwCtl, getCommandValFromAbs(lwnPos));\r\n  command = concatCommand(command, rwCtl, getCommandValFromAbs(rwnPos));\r\n  return command;\r\n} else if ($prop('Settings.TestMaxTensions')) {\r\n  var command = \"\";\r\n  command = concatCommand(command, lsCtl, getCommandValFromAbs(getMaxTensionPos(lsnPos, lsm)));\r\n  command = concatCommand(command, rsCtl, getCommandValFromAbs(getMaxTensionPos(rsnPos, rsm)));\r\n  command = concatCommand(command, lwCtl, getCommandValFromAbs(getMaxTensionPos(lwnPos, lwm)));\r\n  command = concatCommand(command, rwCtl, getCommandValFromAbs(getMaxTensionPos(rwnPos, rwm)));\r\n  return command;\r\n}\r\n"
       },
       "IsEnabled": true,
       "MaximumFrequency": 0
@@ -47,7 +47,7 @@
             "Maximum": 100,
             "Minimum": 0,
             "PropertyName": "LeftShoulderNeutral",
-            "CurrentValue": 43,
+            "CurrentValue": 27,
             "Name": null,
             "TypeName": "SliderEntry",
             "IsEnabled": true,
@@ -145,7 +145,7 @@
             "Maximum": 100,
             "Minimum": 0,
             "PropertyName": "LeftShoulderMax",
-            "CurrentValue": 40,
+            "CurrentValue": 88,
             "Name": null,
             "TypeName": "SliderEntry",
             "IsEnabled": true,
@@ -211,7 +211,7 @@
           },
           {
             "PropertyName": "TestMaxTensions",
-            "CurrentValue": true,
+            "CurrentValue": false,
             "Name": null,
             "TypeName": "BoolEntry",
             "IsEnabled": true,

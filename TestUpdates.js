@@ -42,7 +42,7 @@ function concatCommand(command, servoIndex, val){
 }
 
 function applyNeutralOffset(offsetPos, decimalValue){
-  decimalValue = Math.max(Math.min(decimalValue, -1), 1);
+  decimalValue = Math.max(Math.min(decimalValue, 1), -1);
   var posValue = offsetPos;
   if (decimalValue > 0) {
     posValue = offsetPos + ((valCount - offsetPos) * decimalValue)
@@ -63,7 +63,7 @@ if ($prop('Settings.TestNeutralTensions')) {
   command = concatCommand(command, lwCtl, getCommandValFromAbs(lwnPos));
   command = concatCommand(command, rwCtl, getCommandValFromAbs(rwnPos));
   return command;
-} else {//if ($prop('Settings.TestMaxTensions')) {
+} else if ($prop('Settings.TestMaxTensions')) {
   var command = "";
   command = concatCommand(command, lsCtl, getCommandValFromAbs(getMaxTensionPos(lsnPos, lsm)));
   command = concatCommand(command, rsCtl, getCommandValFromAbs(getMaxTensionPos(rsnPos, rsm)));
