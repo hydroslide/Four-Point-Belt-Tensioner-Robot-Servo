@@ -3,10 +3,15 @@ var rsn = [$prop('Settings.RightShoulderNeutral')];
 var lwn = [$prop('Settings.LeftWaistNeutral')];
 var rwn = [$prop('Settings.RightWaistNeutral')];
 
-var lsm = [$prop('Settings.LeftShoulderMax')];
-var rsm = [$prop('Settings.RightShoulderMax')];
-var lwm = [$prop('Settings.LeftWaistMax')];
-var rwm = [$prop('Settings.RightWaistMax')];
+var lsMax = [$prop('Settings.LeftShoulderMax')];
+var rsMax = [$prop('Settings.RightShoulderMax')];
+var lwMax = [$prop('Settings.LeftWaistMax')];
+var rwMax = [$prop('Settings.RightWaistMax')];
+
+var lsMin = [$prop('Settings.LeftShoulderMin')];
+var rsMin = [$prop('Settings.RightShoulderMin')];
+var lwMin = [$prop('Settings.LeftWaistMin')];
+var rwMin = [$prop('Settings.RightWaistMin')];
 
 var ctlCount = 5;
 var valCount = 255 - ctlCount;
@@ -56,6 +61,10 @@ function getMaxTensionPos(offsetPos, maxVal){
   return applyNeutralOffset(offsetPos, (maxVal / 100));
 }
 
+function getMinTensionPos(offsetPos, minVal){
+  return applyNeutralOffset(offsetPos, (minVal / 100)*-1);
+}
+
 if ($prop('Settings.TestNeutralTensions')) {
   var command = "";
   command = concatCommand(command, lsCtl, getCommandValFromAbs(lsnPos));
@@ -65,9 +74,16 @@ if ($prop('Settings.TestNeutralTensions')) {
   return command;
 } else if ($prop('Settings.TestMaxTensions')) {
   var command = "";
-  command = concatCommand(command, lsCtl, getCommandValFromAbs(getMaxTensionPos(lsnPos, lsm)));
-  command = concatCommand(command, rsCtl, getCommandValFromAbs(getMaxTensionPos(rsnPos, rsm)));
-  command = concatCommand(command, lwCtl, getCommandValFromAbs(getMaxTensionPos(lwnPos, lwm)));
-  command = concatCommand(command, rwCtl, getCommandValFromAbs(getMaxTensionPos(rwnPos, rwm)));
+  command = concatCommand(command, lsCtl, getCommandValFromAbs(getMaxTensionPos(lsnPos, lsMax)));
+  command = concatCommand(command, rsCtl, getCommandValFromAbs(getMaxTensionPos(rsnPos, rsMax)));
+  command = concatCommand(command, lwCtl, getCommandValFromAbs(getMaxTensionPos(lwnPos, lwMax)));
+  command = concatCommand(command, rwCtl, getCommandValFromAbs(getMaxTensionPos(rwnPos, rwMax)));
+  return command;
+}else if ($prop('Settings.TestMinTensions')) {
+  var command = "";
+  command = concatCommand(command, lsCtl, getCommandValFromAbs(getMinTensionPos(lsnPos, lsMin)));
+  command = concatCommand(command, rsCtl, getCommandValFromAbs(getMinTensionPos(rsnPos, rsMin)));
+  command = concatCommand(command, lwCtl, getCommandValFromAbs(getMinTensionPos(lwnPos, lwMin)));
+  command = concatCommand(command, rwCtl, getCommandValFromAbs(getMinTensionPos(rwnPos, rwMin)));
   return command;
 }
