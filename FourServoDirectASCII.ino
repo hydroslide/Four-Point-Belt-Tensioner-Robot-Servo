@@ -16,7 +16,7 @@ bool isAbove127 = false;
 
 // create servo objects to control any servo
 Servo myServo[nbServos];
-const byte servoPin[nbServos] = {3,4,5,6};  // digital pins (not necessarily ~pwm)
+const byte servoPin[nbServos] = {5,6,3,4};  // digital pins (not necessarily ~pwm)
 const byte inversion[nbServos] = {0, 0, 0, 0 }; // parameter to change if a servo goes the wrong way
 int OldSerialValue[nbServos] = {0, 0, 0, 0};
 //int NewSerialValue[nbServos] = {0, 0, 0, 0};
@@ -41,10 +41,13 @@ void setup()
     }
   // move the servos to signal startup
   MoveAllServosMaxtoDegrees(maxVal); // Max
-  delay(2000);
+  delay(1000);
   // send all servos to home
   MoveAllServosMaxtoDegrees(0);
-  // delay(2000);
+  delay(1000);
+
+  MoveAllServosMaxtoDegrees(50);
+  delay(1000);
 }
 
 void loop()
