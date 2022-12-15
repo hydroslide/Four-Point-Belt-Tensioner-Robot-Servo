@@ -1,72 +1,4 @@
-var lsn = [$prop('Settings.LeftShoulderNeutral')];
-var rsn = [$prop('Settings.RightShoulderNeutral')];
-var lwn = [$prop('Settings.LeftWaistNeutral')];
-var rwn = [$prop('Settings.RightWaistNeutral')];
-
-var lsMax = [$prop('Settings.LeftShoulderMax')];
-var rsMax = [$prop('Settings.RightShoulderMax')];
-var lwMax = [$prop('Settings.LeftWaistMax')];
-var rwMax = [$prop('Settings.RightWaistMax')];
-
-var lsMin = [$prop('Settings.LeftShoulderMin')];
-var rsMin = [$prop('Settings.RightShoulderMin')];
-var lwMin = [$prop('Settings.LeftWaistMin')];
-var rwMin = [$prop('Settings.RightWaistMin')];
-
-var ctlCount = 2;
-var valCount = 255 - ctlCount;
-
-var ctlCode = 1;
-
-var lsCtl = 3;
-var rsCtl = 4;
-var lwCtl = 5;
-var rwCtl = 6;
-
-function calcAbsFromPct(pct){
-  return (pct / 100) * (valCount);
-}
-
-function getCommandValFromAbs(abs){
-  return abs + ctlCount;
-}
-
-var lsnPos = calcAbsFromPct(lsn);
-var rsnPos = calcAbsFromPct(rsn);
-var lwnPos = calcAbsFromPct(lwn);
-var rwnPos = calcAbsFromPct(rwn);
-
-function concatCommand(command, servoIndex, val){
-  var above127Ctl = 0;
-  command = command.concat(String.fromCharCode(ctlCode));
-  command = command.concat(String.fromCharCode(servoIndex));
-  if (val > 127) {
-    val -= 127;
-    command = command.concat(String.fromCharCode(above127Ctl));
-  }
-  val = Math.min(~~val, 127);
-  command = command.concat(String.fromCharCode(~~val));
-  return command;
-}
-
-function applyNeutralOffset(offsetPos, decimalValue){
-  decimalValue = Math.max(Math.min(decimalValue, 1), -1);
-  var posValue = offsetPos;
-  if (decimalValue > 0) {
-    posValue = offsetPos + ((valCount - offsetPos) * decimalValue)
-  } else if (decimalValue < 0) {
-    posValue = offsetPos - (offsetPos * Math.abs(decimalValue))
-  }
-  return posValue;
-}
-
-function getMaxTensionPos(offsetPos, maxVal){
-  return applyNeutralOffset(offsetPos, (maxVal / 100));
-}
-
-function getMinTensionPos(offsetPos, minVal){
-  return applyNeutralOffset(offsetPos, (minVal / 100)*-1);
-}
+var utils = GetTensionUtils();
 
 function SmoothItOut(servoName, val) {
   // Low-pass IIR filtering of left and right tension values
@@ -155,14 +87,18 @@ lwVal = SmoothItOut("lw", lwVal);
 rwVal = SmoothItOut("rw", rwVal);
 
 
-lsVal = ApplyMaxMin(lsMin, lsMax, lsVal);
-rsVal = ApplyMaxMin(rsMin, rsMax, rsVal);
-lwVal = ApplyMaxMin(lwMin, lwMax, lwVal);
-rwVal = ApplyMaxMin(rwMin, rwMax, rwVal);
+lsVal = ApplyMaxMin(utils.lsMin, utils.lsMax, lsVal);
+rsVal = ApplyMaxMin(utils.rsMin, utils.rsMax, rsVal);
+lwVal = ApplyMaxMin(utils.lwMin, utils.lwMax, lwVal);
+rwVal = ApplyMaxMin(utils.rwMin, utils.rwMax, rwVal);
+
+var concatCommand = utils.concatCommand;
+var getCommandValFromAbs = utils.getCommandValFromAbs;
+var applyNeutralOffset = utils.applyNeutralOffset;
 
 var command = "";
-command = concatCommand(command, lsCtl, getCommandValFromAbs(applyNeutralOffset(lsnPos, lsVal)));
-command = concatCommand(command, rsCtl, getCommandValFromAbs(applyNeutralOffset(rsnPos, rsVal)));
-command = concatCommand(command, lwCtl, getCommandValFromAbs(applyNeutralOffset(lwnPos, lwVal)));
-command = concatCommand(command, rwCtl, getCommandValFromAbs(applyNeutralOffset(rwnPos, rwVal)));
+command = concatCommand(command, utils.lsCtl, getCommandValFromAbs(applyNeutralOffset(utils.lsnPos, lsVal)));
+command = concatCommand(command, utils.rsCtl, getCommandValFromAbs(applyNeutralOffset(utils.rsnPos, rsVal)));
+command = concatCommand(command, utils.lwCtl, getCommandValFromAbs(applyNeutralOffset(utils.lwnPos, lwVal)));
+command = concatCommand(command, utils.rwCtl, getCommandValFromAbs(applyNeutralOffset(utils.rwnPos, rwVal)));
 return command;
