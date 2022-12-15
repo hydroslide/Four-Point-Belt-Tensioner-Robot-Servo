@@ -1,4 +1,7 @@
 #include <Servo.h>  // local library "Servo.h"
+#include "LEDFunctions.h"
+
+LEDFunctions leds;
 
 bool shouldDebug = true;
 
@@ -63,6 +66,8 @@ void setup()
 
   MoveAllServosMaxtoDegrees(50);
   delay(1000);
+
+  leds.setup();
 }
 
 void loop()
@@ -113,7 +118,7 @@ void loop()
       }
     }
   }
-  
+  leds.loop();
 }
 
 void sendServoSetpointMaxtoDegrees(byte servoID, int val )
