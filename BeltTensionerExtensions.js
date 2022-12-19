@@ -72,6 +72,10 @@ GetTensionUtils = function () {
     }
 
     return {
+        lsCtl,
+        rsCtl,
+        lwCtl,
+        rwCtl,
         lsn,
         rsn,
         lwn,

@@ -26,13 +26,15 @@ var gforce_x = $prop('ShakeITMotorsV3Plugin.Export.LateralGforce.Right')-$prop('
 var gforce_y = $prop('ShakeITMotorsV3Plugin.Export.DecelGforce.Front') - $prop('ShakeITMotorsV3Plugin.Export.AccelGforce.Rear')// 
 var gforce_z = 0;//
 */
-var gforce_x = $prop('AccelerationSway');	// lateral (yaw) 
-var gforce_y = - $prop('GlobalAccelerationG');	// deceleration
-var gforce_z = $prop('AccelerationHeave');
+var gForceSway = $prop('AccelerationSway');	// lateral (yaw) 
+var gForceSurge = $prop('GlobalAccelerationG');	// deceleration
+var gForceHeave = $prop('AccelerationHeave');
 
-gforce_x *= $prop('Settings.yaw_gain');
-gforce_y *= $prop('Settings.decel_gain');
-gforce_z *= $prop('Settings.heave_gain');
+var masterGain = $prop('Settings.master_gain') / 10;
+
+gForceSway *= ($prop('Settings.yaw_gain') / 10) * masterGain;
+gForceSurge *= ($prop('Settings.decel_gain') / 10) * masterGain;
+gForceHeave *= ($prop('Settings.heave_gain') / 10) * masterGain;
 
 
 // if (0 > gforce_y)
@@ -44,6 +46,7 @@ var rsVal = 0;
 var lwVal = 0;
 var rwVal = 0;
 
+/* // Old code
 // convert speed and yaw changes to left and right tension values
 // turning right should increase right harness tension (body pushed left)
 var rs = Math.sqrt(gforce_y * gforce_y + gforce_x * gforce_x);
@@ -61,12 +64,80 @@ if (0 > gforce_x) {
   rw = lw;
   lw = t;
 }
+*/
+
+var rs = 0;
+var ls = 0;
+var rw = 0;
+var lw = 0;
+
+var beltForces = {
+  ls: [],
+  rs: [],
+  lw: [],
+  rw: []
+}
+
+var combineForces = function (arr) {
+  //return avg(arr);
+  var bestValue = 0;
+
+  arr.forEach(function (val) {
+    if (Math.abs(val) > Math.abs(bestValue))
+      bestValue = val;
+  });
+  return bestValue;
+}
+
+var avg = function (arr) {
+  if (arr.length > 0) {
+    var total = 0;
+
+    arr.forEach(function (val) {
+      total += val;
+    });
+
+    return total / arr.length;
+  }
+  else
+    return 0;
+}
+
+var positiveSurgeMultiplier = 2;//1.5
+
+if (gForceSurge > 0)
+  gForceSurge *= positiveSurgeMultiplier;
+
+beltForces.ls.push(gForceSurge);
+beltForces.rs.push(gForceSurge);
+if (gForceSurge < 0) {
+  beltForces.lw.push(Math.abs(gForceSurge))
+  beltForces.rw.push(Math.abs(gForceSurge))
+}
+
+var shoulderSwayMultiplier = .25
+if (gForceSway < 0) {
+  beltForces.lw.push(gForceSway * -1);
+  beltForces.ls.push(gForceSway * -1 * shoulderSwayMultiplier);
+}
+else {
+  beltForces.rw.push(gForceSway);
+  beltForces.rs.push(gForceSway * shoulderSwayMultiplier);
+}
+
+beltForces.lw.push(-1 * gForceHeave);
+beltForces.rw.push(-1 * gForceHeave);
+
+ls = combineForces(beltForces.ls);
+rs = combineForces(beltForces.rs);
+lw = combineForces(beltForces.lw);
+rw = combineForces(beltForces.rw);
 
 // Normalize to a value between 0 and 1
-rsVal = rs / 200000;
-lsVal = ls / 200000;
-rwVal = rw / 200000;
-lwVal = lw / 200000;
+rsVal = rs / 2000;
+lsVal = ls / 2000;
+rwVal = rw / 2000;
+lwVal = lw / 2000;
 
 //return lsVal.toString()+","+lwVal.toString()+","+rwVal.toString()+","+rsVal.toString()
 
@@ -97,8 +168,19 @@ var getCommandValFromAbs = utils.getCommandValFromAbs;
 var applyNeutralOffset = utils.applyNeutralOffset;
 
 var command = "";
+
+
+if (!$prop('Settings.useShoulder')) {
+  lsVal = 0;
+  rsVal = 0;
+}
+if (!$prop('Settings.useWaist')) {
+  lwVal = 0;
+  rwVal = 0;
+}
 command = concatCommand(command, utils.lsCtl, getCommandValFromAbs(applyNeutralOffset(utils.lsnPos, lsVal)));
 command = concatCommand(command, utils.rsCtl, getCommandValFromAbs(applyNeutralOffset(utils.rsnPos, rsVal)));
 command = concatCommand(command, utils.lwCtl, getCommandValFromAbs(applyNeutralOffset(utils.lwnPos, lwVal)));
 command = concatCommand(command, utils.rwCtl, getCommandValFromAbs(applyNeutralOffset(utils.rwnPos, rwVal)));
+
 return command;
