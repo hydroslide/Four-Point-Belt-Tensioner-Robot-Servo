@@ -1,7 +1,7 @@
 #include <Servo.h>  // local library "Servo.h"
-#include "LEDFunctions.h"
+//#include "LEDFunctions.h"
 
-LEDFunctions leds;
+//LEDFunctions leds;
 
 bool shouldDebug = true;
 
@@ -17,9 +17,16 @@ const byte rightShoulderCtl = 4;
 const byte leftWaistCtl = 5;
 const byte rightWaistCtl = 6;
 const byte forceSleepCtl = 7;
-const byte setRedCtl = 8;
-const byte setGreenCtl = 9;
-const byte setBlueCtl = 10;
+const byte setRedLeftCtl = 8;
+const byte setGreenLeftCtl = 9;
+const byte setBlueLeftCtl = 10;
+const byte setRedRightCtl = 11;
+const byte setGreenRightCtl = 12;
+const byte setBlueRightCtl = 13;
+const byte leftShoulderNeutralCtl = 14;
+const byte rightShoulderNeutralCtl = 15;
+const byte leftWaistNeutralCtl = 16;
+const byte rightWaistNeutralCtl = 17;
 
 const byte maxVal = 253;
 
@@ -27,7 +34,7 @@ bool isAbove127 = false;
 
 // create servo objects to control any servo
 Servo myServo[nbServos];
-const byte servoPin[nbServos] =  {4,7,2,8};//{2,4,7,8};  // digital pins (not necessarily ~pwm)
+const byte servoPin[nbServos] =  {10,8,4,7};//{4,7,2,8};  // digital pins (not necessarily ~pwm)
 const byte inversion[nbServos] = {0, 0, 0, 0}; // parameter to change if a servo goes the wrong way
 int OldSerialValue[nbServos] = {0, 0, 0, 0};
 //int NewSerialValue[nbServos] = {0, 0, 0, 0};
@@ -67,7 +74,7 @@ void setup()
   MoveAllServosMaxtoDegrees(50);
   delay(1000);
 
-  leds.setup();
+  //leds.setup();
 }
 
 void loop()
@@ -97,10 +104,10 @@ void loop()
         expectServoValue=true;
         currentServoIndex = bufferCurrent-leftShoulderCtl;
         Debug("Got a control character: "+(String)bufferCurrent+", currentServoIndex: "+(String)currentServoIndex);
-      } else if (bufferCurrent >= setRedCtl && bufferCurrent <= setBlueCtl){
+      } else if (bufferCurrent >= setRedLeftCtl && bufferCurrent <= setBlueRightCtl){
         expectRGBValue = true;
-        currentColorIndex = bufferCurrent-setRedCtl;
-        Debug("Got a control character: "+(String)bufferCurrent+", currentServoIndex: "+(String)currentColorIndex);
+        currentColorIndex = bufferCurrent-setRedLeftCtl;
+        Debug("Got a control character: "+(String)bufferCurrent+", currentColorIndex: "+(String)currentColorIndex);
       }
     }else { 
       bufferCurrent -= (255-maxVal); 
@@ -113,12 +120,13 @@ void loop()
           OldSerialValue[currentServoIndex] = bufferCurrent;
         }
       }else if (expectRGBValue){
+        Debug("Got a value. Gonna set LED: "+(String)currentColorIndex+" to "+(String)bufferCurrent);
         expectRGBValue = false;
-        // TODO: Set the correct pins for RGB.
+        //leds.SetColorLevel(currentColorIndex,bufferCurrent);
       }
     }
   }
-  leds.loop();
+  //leds.LedLoop();
 }
 
 void sendServoSetpointMaxtoDegrees(byte servoID, int val )
