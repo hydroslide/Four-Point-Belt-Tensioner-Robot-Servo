@@ -44,6 +44,8 @@ int servoHomeDegrees[nbServos] = { 0, 0, 2, 0}; //will be updated with the initi
 int servoMaxDegrees[nbServos] = { 175,179,179,175}; // leftthigh, rightthigh, leftside, rightside
 int currentServoIndex = 0;
 
+int servoNativeDegrees[nbServos] = { 270,270,180,270}; 
+
 const int servoOffset[nbServos] = {-2,-2,1,-2};
 
 int currentColorIndex = 0;
@@ -138,6 +140,11 @@ void sendServoSetpointMaxtoDegrees(byte servoID, int val )
   //targetDegrees +=servoOffset[servoID];
 
   //  map(value, fromLow, fromHigh, toLow, toHigh)
+
+  //Translate the 180 degree range into the equivalent based on the native range. 
+  double nativeRatio = (double)180/(double)servoNativeDegrees[servoID];
+  targetDegrees = (int)((double)targetDegrees*nativeRatio);
+
   myServo[servoID].write(targetDegrees);              // tell servo to go to position in variable : in steps of 1 degree
   Debug("Servo ID: "+(String)servoID+", val: "+(String)val+", degrees: "+(String)targetDegrees);
 }
