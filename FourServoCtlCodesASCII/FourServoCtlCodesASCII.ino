@@ -48,6 +48,11 @@ int servoNativeDegrees[nbServos] = { 270,270,180,270};
 
 const int servoOffset[nbServos] = {-2,-2,1,-2};
 
+const int currentSensorPin[nbServos] = {A0,A1,A2,A3};
+
+const milliVoltsPerAmp = 100;
+const int ACSOffset = 2500;
+
 int currentColorIndex = 0;
 
 const byte deadZone = 2;
@@ -129,6 +134,15 @@ void loop()
     }
   }
   //leds.LedLoop();
+}
+
+double calculateAmps(int pin){
+  double volts;
+  double amps;
+  int rawValue=analogRead(pin);
+  volts = (rawValue/1024.0)*5000;
+  amps = ((volts-ACSOffset)/milliVoltsPerAmp);
+  return amps;
 }
 
 void sendServoSetpointMaxtoDegrees(byte servoID, int val )
