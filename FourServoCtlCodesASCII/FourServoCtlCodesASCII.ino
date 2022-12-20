@@ -1,7 +1,7 @@
 #include <Servo.h>  // local library "Servo.h"
-#include "LEDFunctions.h"
+//#include "LEDFunctions.h"
 
-LEDFunctions leds;
+//LEDFunctions leds;
 
 bool shouldDebug = true;
 
@@ -17,9 +17,16 @@ const byte rightShoulderCtl = 4;
 const byte leftWaistCtl = 5;
 const byte rightWaistCtl = 6;
 const byte forceSleepCtl = 7;
-const byte setRedCtl = 8;
-const byte setGreenCtl = 9;
-const byte setBlueCtl = 10;
+const byte setRedLeftCtl = 8;
+const byte setGreenLeftCtl = 9;
+const byte setBlueLeftCtl = 10;
+const byte setRedRightCtl = 11;
+const byte setGreenRightCtl = 12;
+const byte setBlueRightCtl = 13;
+const byte leftShoulderNeutralCtl = 14;
+const byte rightShoulderNeutralCtl = 15;
+const byte leftWaistNeutralCtl = 16;
+const byte rightWaistNeutralCtl = 17;
 
 const byte maxVal = 253;
 
@@ -27,7 +34,7 @@ bool isAbove127 = false;
 
 // create servo objects to control any servo
 Servo myServo[nbServos];
-const byte servoPin[nbServos] =  {4,7,2,8};//{2,4,7,8};  // digital pins (not necessarily ~pwm)
+const byte servoPin[nbServos] =  {10,8,4,7};//{4,7,2,8};  // digital pins (not necessarily ~pwm)
 const byte inversion[nbServos] = {0, 0, 0, 0}; // parameter to change if a servo goes the wrong way
 int OldSerialValue[nbServos] = {0, 0, 0, 0};
 //int NewSerialValue[nbServos] = {0, 0, 0, 0};
@@ -37,7 +44,14 @@ int servoHomeDegrees[nbServos] = { 0, 0, 2, 0}; //will be updated with the initi
 int servoMaxDegrees[nbServos] = { 175,179,179,175}; // leftthigh, rightthigh, leftside, rightside
 int currentServoIndex = 0;
 
+int servoNativeDegrees[nbServos] = { 270,270,180,270}; 
+
 const int servoOffset[nbServos] = {-2,-2,1,-2};
+
+const int currentSensorPin[nbServos] = {A0,A1,A2,A3};
+
+const milliVoltsPerAmp = 100;
+const int ACSOffset = 2500;
 
 int currentColorIndex = 0;
 
@@ -67,7 +81,7 @@ void setup()
   MoveAllServosMaxtoDegrees(50);
   delay(1000);
 
-  leds.setup();
+  //leds.setup();
 }
 
 void loop()
@@ -97,10 +111,10 @@ void loop()
         expectServoValue=true;
         currentServoIndex = bufferCurrent-leftShoulderCtl;
         Debug("Got a control character: "+(String)bufferCurrent+", currentServoIndex: "+(String)currentServoIndex);
-      } else if (bufferCurrent >= setRedCtl && bufferCurrent <= setBlueCtl){
+      } else if (bufferCurrent >= setRedLeftCtl && bufferCurrent <= setBlueRightCtl){
         expectRGBValue = true;
-        currentColorIndex = bufferCurrent-setRedCtl;
-        Debug("Got a control character: "+(String)bufferCurrent+", currentServoIndex: "+(String)currentColorIndex);
+        currentColorIndex = bufferCurrent-setRedLeftCtl;
+        Debug("Got a control character: "+(String)bufferCurrent+", currentColorIndex: "+(String)currentColorIndex);
       }
     }else { 
       bufferCurrent -= (255-maxVal); 
@@ -113,12 +127,22 @@ void loop()
           OldSerialValue[currentServoIndex] = bufferCurrent;
         }
       }else if (expectRGBValue){
+        Debug("Got a value. Gonna set LED: "+(String)currentColorIndex+" to "+(String)bufferCurrent);
         expectRGBValue = false;
-        // TODO: Set the correct pins for RGB.
+        //leds.SetColorLevel(currentColorIndex,bufferCurrent);
       }
     }
   }
-  leds.loop();
+  //leds.LedLoop();
+}
+
+double calculateAmps(int pin){
+  double volts;
+  double amps;
+  int rawValue=analogRead(pin);
+  volts = (rawValue/1024.0)*5000;
+  amps = ((volts-ACSOffset)/milliVoltsPerAmp);
+  return amps;
 }
 
 void sendServoSetpointMaxtoDegrees(byte servoID, int val )
@@ -130,6 +154,11 @@ void sendServoSetpointMaxtoDegrees(byte servoID, int val )
   //targetDegrees +=servoOffset[servoID];
 
   //  map(value, fromLow, fromHigh, toLow, toHigh)
+
+  //Translate the 180 degree range into the equivalent based on the native range. 
+  double nativeRatio = (double)180/(double)servoNativeDegrees[servoID];
+  targetDegrees = (int)((double)targetDegrees*nativeRatio);
+
   myServo[servoID].write(targetDegrees);              // tell servo to go to position in variable : in steps of 1 degree
   Debug("Servo ID: "+(String)servoID+", val: "+(String)val+", degrees: "+(String)targetDegrees);
 }

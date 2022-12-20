@@ -10,8 +10,8 @@ FASTLED_USING_NAMESPACE
 #warning "Requires FastLED 3.1 or later; check github for latest code."
 #endif
 
-#define FAN_PIN_RIGHT    9
-#define FAN_PIN_LEFT    3
+#define FAN_PIN_RIGHT   12
+#define FAN_PIN_LEFT    13
 #define LED_TYPE    WS2811
 #define COLOR_ORDER GRB
 #define NUM_LEDS    16
@@ -23,7 +23,9 @@ class LEDFunctions {
 public:
   LEDFunctions();
   void setup();
-  void loop();
+  void LedLoop();
+  void SetColorLevel(byte colorIndex, byte value);
+  long TimeDelta();
 
 private:
   CRGB leds[NUM_LEDS];
@@ -33,6 +35,7 @@ private:
   
   void rainbow();
   void chaseDot();
+  void ShowRGB();
 };
 
 #endif // LED_FUNCTIONS_H
