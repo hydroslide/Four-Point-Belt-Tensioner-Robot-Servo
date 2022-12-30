@@ -48,6 +48,8 @@ int servoNativeDegrees[nbServos] = { 180,270,180,270};
 
 const int currentSensorPins[nbServos] = {A0,A1,A2,A3};
 
+const int milliVoltsPerAmp = 100;
+const int ACSOffset = 2500;
 
 int currentColorIndex = 0;
 
@@ -144,8 +146,9 @@ void loop()
 
   _currentMonitor->loop();
   bool* nominal = _currentMonitor->isEverythingNominal();
-  //printNominal(nominal, delta);  
-  printNominalOnDemand(delta);
+  printNominal(nominal, delta);  
+  //printNominalOnDemand(delta);
+  delete[] nominal;
 }
 
 void printNominal(bool* nominal, long delta){
@@ -173,6 +176,7 @@ void printNominalOnDemand(long delta){
       Serial.print(nominal[i]);
     }
     Serial.println();
+    delete[] nominal;
   }else
     msSinceNominal+=delta;
 }

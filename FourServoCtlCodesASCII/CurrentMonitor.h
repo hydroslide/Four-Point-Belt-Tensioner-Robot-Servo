@@ -19,6 +19,7 @@ private:
   void calculateAmps();
   void printAmps();
   void nominalCheck();
+  void updateDurations(long durationDelta);
 
   int* _currentSensorPins;
   long* _overCurrentDurations;

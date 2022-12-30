@@ -39,13 +39,7 @@ void CurrentMonitor::loop() {
     printAmps();
 
     nominalCheck();
-    for(int i = 0; i < _nbServos; i++) {
-      if(_nominal[i]) {
-        _overCurrentDurations[i] = 0;
-      } else {
-        _overCurrentDurations[i] = _overCurrentDurations[i] +(oldMsSinceMeasure);
-      }
-    }
+    updateDurations(oldMsSinceMeasure);
 
     
   } else {
@@ -62,9 +56,20 @@ bool* CurrentMonitor::isEverythingNominal() {
   return _nominal;
 }
 
+void CurrentMonitor::updateDurations(long durationDelta){
+    for(int i = 0; i < _nbServos; i++) {
+      if(_nominal[i]) {
+        _overCurrentDurations[i] = 0;
+      } else {
+        _overCurrentDurations[i] = _overCurrentDurations[i] +(durationDelta);
+      }
+    }
+}
+
 bool* CurrentMonitor::onDemandOverCurrentCheck() {
   calculateAmps();
   nominalCheck();  
+  updateDurations(0);
   return _nominal;
 }
 
