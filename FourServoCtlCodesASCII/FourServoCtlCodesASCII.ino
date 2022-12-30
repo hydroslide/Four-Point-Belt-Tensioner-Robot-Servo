@@ -1,5 +1,6 @@
 #include <Servo.h>  // local library "Servo.h"
 //#include "LEDFunctions.h"
+#include "CurrentMonitor.h"
 
 //LEDFunctions leds;
 
@@ -37,21 +38,21 @@ Servo myServo[nbServos];
 const byte servoPin[nbServos] =  {10,8,4,7};//{4,7,2,8};  // digital pins (not necessarily ~pwm)
 const byte inversion[nbServos] = {0, 0, 0, 0}; // parameter to change if a servo goes the wrong way
 int OldSerialValue[nbServos] = {0, 0, 0, 0};
-//int NewSerialValue[nbServos] = {0, 0, 0, 0};
+int intendedDegrees[nbServos] = {0, 0, 0, 0};
 
 // servo span:
 int servoHomeDegrees[nbServos] = { 0, 0, 2, 0}; //will be updated with the initial pressure measurement
-int servoMaxDegrees[nbServos] = { 175,179,179,175}; // leftthigh, rightthigh, leftside, rightside
+int servoEndDegrees[nbServos] = { 175,179,179,175}; // leftthigh, rightthigh, leftside, rightside
 int currentServoIndex = 0;
 
 int servoNativeDegrees[nbServos] = { 270,270,180,270}; 
 
-const int servoOffset[nbServos] = {-2,-2,1,-2};
+int servoNeutralDegrees[nbServos] = {0,0,0,0};
+int servoCurrentMinDegrees[nbServos] = { 0, 0, 0, 0}; //will be updated with the initial pressure measurement
+int servoCurrentMaxDegrees[nbServos] = { 0,0,0,0};
 
-const int currentSensorPin[nbServos] = {A0,A1,A2,A3};
+const int currentSensorPins[nbServos] = {A0,A1,A2,A3};
 
-const milliVoltsPerAmp = 100;
-const int ACSOffset = 2500;
 
 int currentColorIndex = 0;
 
@@ -61,10 +62,22 @@ bool expectControl = false;
 bool expectServoValue = false;
 bool expectRGBValue = false;
 
+long previousTime=0;
+
+CurrentMonitor* _currentMonitor;
+double _currentThreshold = 3.0;
+long _overCurrentTimeout = 700;
+int overCurrentDegreeDelta = 1;
+int overCurrentDelay=200;
+int postNotNominalDelay = 3000;
 
 void setup()
 {
+  _currentMonitor = new CurrentMonitor(nbServos,  currentSensorPins, _currentThreshold, _overCurrentTimeout);
+
   Serial.begin(115200); // opens serial port at specified baud rate
+
+  _currentMonitor->setup();
 
   // attach the Servos to the pins
   for (byte i = 0; i < nbServos; i++) {
@@ -72,7 +85,7 @@ void setup()
     myServo[i].attach(servoPin[i],500,2500);  // attaches the servo on servoPin pin
     }
   // move the servos to signal startup
-  MoveAllServosMaxtoDegrees(maxVal); // Max
+  MoveAllServosMaxtoDegrees(100); // Max
   delay(1000);
   // send all servos to home
   MoveAllServosMaxtoDegrees(0);
@@ -84,8 +97,57 @@ void setup()
   //leds.setup();
 }
 
+// ***************** Begin Test Code ********************
+int step = 0;
+
+byte cycle(){
+
+    byte val = 0;
+    switch(step){
+        case 0:
+            val= 64;
+            break;
+        case 1:
+            val= 192;
+            break;
+        case 2:
+            val= 64;
+            break;
+        case 3:
+            val= 253;
+            break;
+    }
+        step++;
+    if (step>3)
+      step=0;
+    return val;
+}
+
+
+int cycleInterval = 5000;
+int msSinceCycle = 0;
+int nominalInterval = 100;
+int msSinceNominal = 0;
+bool doCycle=false;
+
+void loopCycle(long delta){
+  if (doCycle){
+    byte id = 0;
+    if (msSinceCycle >= cycleInterval){
+      msSinceCycle=0;
+      byte val = cycle();
+      sendServoSetpointMaxtoDegrees(id,val);
+    }else
+      msSinceCycle+=delta;
+  }
+}
+// ***************** End  Test  Code ********************
+
 void loop()
 {
+  long delta = timeDelta();
+
+
   // SerialValues contain the last order received (if there is no newer received, the last is kept)
 
   if (Serial.available())
@@ -121,7 +183,7 @@ void loop()
       if (expectServoValue){  
         expectServoValue=false;     
         Debug("Got a value. Gonna set servo: "+(String)currentServoIndex+" to "+(String)bufferCurrent);
-        //NewSerialValue[currentServoIndex] = bufferCurrent;
+        
         if (abs(OldSerialValue[currentServoIndex] - bufferCurrent) > deadZone) {
           sendServoSetpointMaxtoDegrees(currentServoIndex, CheckForInversion(bufferCurrent, currentServoIndex));
           OldSerialValue[currentServoIndex] = bufferCurrent;
@@ -134,33 +196,102 @@ void loop()
     }
   }
   //leds.LedLoop();
+
+  bool wasntNominal = monitorCurrents(delta);
+  if (wasntNominal)
+    Serial.flush();
+
+  loopCycle(delta);
 }
 
-double calculateAmps(int pin){
-  double volts;
-  double amps;
-  int rawValue=analogRead(pin);
-  volts = (rawValue/1024.0)*5000;
-  amps = ((volts-ACSOffset)/milliVoltsPerAmp);
-  return amps;
+
+bool monitorCurrents(long delta){
+  _currentMonitor->loop();
+  bool* nominal = _currentMonitor->isEverythingNominal();
+  bool notNominal = false;
+  bool wasntNominal = false;
+  printNominal(nominal,delta);
+  do{
+    notNominal = false;
+    // todo change back to nbServos
+    for(int i=0; i<1; i++){
+      if (!nominal[i]){
+        Serial.println("Not Nominal: "+String(i));
+        notNominal=true;
+        wasntNominal=true;
+        int newDegrees = intendedDegrees[i];
+        if (newDegrees> servoNeutralDegrees[i]){
+         newDegrees -=overCurrentDegreeDelta;
+         Serial.println("Too far. New Degrees: "+(String)newDegrees);
+         servoCurrentMaxDegrees[i]= newDegrees;
+        }else{
+         newDegrees+=overCurrentDegreeDelta;
+         Serial.println("Too close. New Degrees: "+(String)newDegrees);
+         servoCurrentMinDegrees[i]=newDegrees;
+        }
+        moveServoToDegrees(i,newDegrees);
+      }
+    }
+    if(notNominal){
+      Serial.println("Not Nominal. Gonna wait "+(String)overCurrentDelay+"ms before checking again");
+      delay(overCurrentDelay);
+      nominal = _currentMonitor->onDemandOverCurrentCheck();
+      printNominal(nominal,timeDelta());
+    }
+  }while(notNominal);
+  if (wasntNominal){
+    Serial.println("Wasn't Nominal, but AG now!!!");
+    delay(postNotNominalDelay);
+  }
+  return wasntNominal;
+}
+
+void printNominal(bool* nominal, long delta){
+ if (msSinceNominal >= nominalInterval){
+    msSinceNominal=0;
+    for(byte i=0; i<nbServos; i++){      
+      if (i>0)
+        Serial.print(",");
+      Serial.print("Nominal_"+(String)i+":");
+      Serial.print(nominal[i]);
+    }
+    Serial.println();
+  }else
+    msSinceNominal+=delta;
+}
+
+int mapValueToDegrees(byte servoID, int val ){
+
+  val = constrain(val, 0, maxVal); // constrain cut above and below: clipping and not scaling (like map)
+
+  return = map(val, 0, maxVal, servoHomeDegrees[servoID], servoEndDegrees[servoID]);
+
 }
 
 void sendServoSetpointMaxtoDegrees(byte servoID, int val )
 {
-  int targetDegrees;
-  val = constrain(val, 0, maxVal); // constrain cut above and below: clipping and not scaling (like map)
+  int targetDegrees mapValueToDegrees(servoID,val);
 
-  targetDegrees = map(val, 0, maxVal, servoHomeDegrees[servoID], servoMaxDegrees[servoID]);
-  //targetDegrees +=servoOffset[servoID];
+  int neutralDegrees =servoNeutralDegrees[i];
+  if (neutralDegrees!=0 && servoCurrentMaxDegrees[i]!=0){
+    if (targetDegrees < neutralDegrees)
+      targetDegrees = map(targetDegrees,0, neutralDegrees,servoCurrentMinDegrees[i],neutralDegrees);
+    else
+      targetDegrees = map(targetDegrees, neutralDegrees, neutralDegrees, servoCurrentMaxDegrees[i]);
+  }
 
-  //  map(value, fromLow, fromHigh, toLow, toHigh)
+  moveServoToDegrees(servoID, targetDegrees);
+  
+}
 
+void moveServoToDegrees(byte servoID, int targetDegrees){
   //Translate the 180 degree range into the equivalent based on the native range. 
   double nativeRatio = (double)180/(double)servoNativeDegrees[servoID];
   targetDegrees = (int)((double)targetDegrees*nativeRatio);
 
   myServo[servoID].write(targetDegrees);              // tell servo to go to position in variable : in steps of 1 degree
-  Debug("Servo ID: "+(String)servoID+", val: "+(String)val+", degrees: "+(String)targetDegrees);
+  intendedDegrees[servoID]=targetDegrees;
+  Debug("Servo ID: "+(String)servoID+", degrees: "+(String)targetDegrees); //val: "+(String)val+",
 }
 
 int CheckForInversion(int val, int servoIndex){
@@ -181,4 +312,12 @@ void MoveAllServosMaxtoDegrees( int target)
 void Debug(String msg){
   if (shouldDebug)
     Serial.println(msg);
+}
+
+
+long timeDelta(){
+  unsigned long currentTime = millis();
+   long delta = (long)(currentTime-previousTime);
+  previousTime = currentTime;
+  return delta;
 }
