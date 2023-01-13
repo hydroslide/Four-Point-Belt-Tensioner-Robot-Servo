@@ -4,11 +4,11 @@
 
 class CurrentMonitor {
 public:
-  CurrentMonitor(int nbServos, int* currentSensorPins, double currentThreshold, long overCurrentTimeout);
+  CurrentMonitor(int nbServos, int* currentSensorPins, double currentThreshold, long overCurrentTimeout, bool shouldPrintAmps);
   void setup();  
   void loop();
   bool* isEverythingNominal();
-  bool* onDemandOverCurrentCheck();
+  bool* onDemandOverCurrentCheck(long durationDelta);
 
 private:
   int _nbServos;  
@@ -16,14 +16,17 @@ private:
   long _overCurrentTimeout;
  
   long monitorTimeDelta();
+  void calculateAmpsRaw(int numSamples);
   void calculateAmps();
-  void printAmps();
+  void printAmps(bool forcePrint);
   void nominalCheck();
   void updateDurations(long durationDelta);
 
+  void calibrateSensors();
+
   int* _currentSensorPins;
   long* _overCurrentDurations;
-  bool _shouldPrintAmps = true;
+  bool _shouldPrintAmps = false;
   unsigned long _previousTime = 0;
   int measureInterval = 50;
   int msSinceMeasure = 0;
@@ -31,6 +34,7 @@ private:
   bool* _nominal;
   double* _samples;
   double* _avgAcs;
+  double* _sensorOffsets;
 };
 
 #endif // CURRENT_MONITOR_H

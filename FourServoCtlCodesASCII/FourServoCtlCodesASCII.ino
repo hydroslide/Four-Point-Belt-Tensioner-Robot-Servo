@@ -4,7 +4,12 @@
 
 //LEDFunctions leds;
 
-bool shouldDebug = true;
+bool shouldDebug = false;
+bool testMode=true;
+bool shouldPrintNominal = true;
+bool shouldPrintAmps = true;
+bool currentAutocorrectEnabled = true;
+const byte testStepSize=10;
 
 const byte nbServos = 4;
 
@@ -28,6 +33,8 @@ const byte leftShoulderNeutralCtl = 14;
 const byte rightShoulderNeutralCtl = 15;
 const byte leftWaistNeutralCtl = 16;
 const byte rightWaistNeutralCtl = 17;
+const byte resetCurrentDegreesCtl = 18;
+const byte advanceCycleCtl = 61;
 
 const byte maxVal = 253;
 
@@ -35,24 +42,26 @@ bool isAbove127 = false;
 
 // create servo objects to control any servo
 Servo myServo[nbServos];
-const byte servoPin[nbServos] =  {10,8,4,7};//{4,7,2,8};  // digital pins (not necessarily ~pwm)
+const byte servoPin[nbServos] =  {10,8,7,4};//{4,7,2,8};  // digital pins (not necessarily ~pwm)
 const byte inversion[nbServos] = {0, 0, 0, 0}; // parameter to change if a servo goes the wrong way
 int OldSerialValue[nbServos] = {0, 0, 0, 0};
 int intendedDegrees[nbServos] = {0, 0, 0, 0};
 
 // servo span:
-int servoHomeDegrees[nbServos] = { 0, 0, 2, 0}; //will be updated with the initial pressure measurement
-int servoEndDegrees[nbServos] = { 175,179,179,175}; // leftthigh, rightthigh, leftside, rightside
+int servoHomeDegrees[nbServos] = { 5, 5, 5, 5}; //will be updated with the initial pressure measurement
+int servoEndDegrees[nbServos] = { 170,170,170,170}; // leftthigh, rightthigh, leftside, rightside
 int currentServoIndex = 0;
 
-int servoNativeDegrees[nbServos] = { 270,270,180,270}; 
+int servoNativeDegrees[nbServos] = { 270,270,270,270}; 
 
-int servoNeutralDegrees[nbServos] = {0,0,0,0};
-int servoCurrentMinDegrees[nbServos] = { 0, 0, 0, 0}; //will be updated with the initial pressure measurement
+int servoNeutralDegrees[nbServos] = {90,90,90,90};
+int servoCurrentMinDegrees[nbServos] = { 0, 0, 0, 0}; //Based on known physical restrictions in available range of movement.
 int servoCurrentMaxDegrees[nbServos] = { 0,0,0,0};
 
 const int currentSensorPins[nbServos] = {A0,A1,A2,A3};
 
+bool doCycle=false;
+bool servoEnabled[nbServos] = { true,true,true,true};
 
 int currentColorIndex = 0;
 
@@ -61,21 +70,23 @@ const byte deadZone = 2;
 bool expectControl = false;
 bool expectServoValue = false;
 bool expectRGBValue = false;
+bool expectNeutralValue = false;
 
 long previousTime=0;
 
 CurrentMonitor* _currentMonitor;
-double _currentThreshold = 3.0;
-long _overCurrentTimeout = 700;
-int overCurrentDegreeDelta = 1;
-int overCurrentDelay=200;
-int postNotNominalDelay = 3000;
+double _currentThreshold = 2.0;
+long _overCurrentTimeout = 500;
+int overCurrentDegreeDelta = 3;
+long overCurrentDelay=200;
+long postNotNominalDelay = 100;
+
 
 void setup()
 {
-  _currentMonitor = new CurrentMonitor(nbServos,  currentSensorPins, _currentThreshold, _overCurrentTimeout);
+  _currentMonitor = new CurrentMonitor(nbServos,  currentSensorPins, _currentThreshold, _overCurrentTimeout, shouldPrintAmps);
 
-  Serial.begin(115200); // opens serial port at specified baud rate
+    Serial.begin(115200); // opens serial port at specified baud rate
 
   _currentMonitor->setup();
 
@@ -84,20 +95,60 @@ void setup()
     // pinMode(servoPin[i], OUTPUT); // done within the library
     myServo[i].attach(servoPin[i],500,2500);  // attaches the servo on servoPin pin
     }
+    
   // move the servos to signal startup
-  MoveAllServosMaxtoDegrees(100); // Max
+  MoveAllServosMaxtoDegrees(0); // Max
   delay(1000);
   // send all servos to home
-  MoveAllServosMaxtoDegrees(0);
-  delay(1000);
+  for (byte i = 0; i < nbServos; i++) {    
+    moveServoToDegrees(i,servoNeutralDegrees[i]);
+    OldSerialValue[i]=127;
+  }
+  // MoveAllServosMaxtoDegrees(20);
+  // delay(1000);
 
-  MoveAllServosMaxtoDegrees(50);
-  delay(1000);
+  // MoveAllServosMaxtoDegrees(50);
+  // delay(1000);
 
   //leds.setup();
+
+
 }
 
 // ***************** Begin Test Code ********************
+struct ABC {
+  int a = 97;
+  int b = 98;
+  int c = 99;
+  int d = 100;
+  int e = 101;
+  int f = 102;
+  int g = 103;
+  int h = 104;
+  int i = 105;
+  int j = 106;
+  int k = 107;
+  int l = 108;
+  int m = 109;
+  int n = 110;
+  int o = 111;
+  int p = 112;
+  int q = 113;
+  int r = 114;
+  int s = 115;
+  int t = 116;
+  int u = 117;
+  int v = 118;
+  int w = 119;
+  int x = 120;
+  int y = 121;
+  int z = 122;
+};
+
+
+ABC abc;
+
+
 int step = 0;
 
 byte cycle(){
@@ -108,13 +159,13 @@ byte cycle(){
             val= 64;
             break;
         case 1:
-            val= 192;
+            val= 100;
             break;
         case 2:
             val= 64;
             break;
         case 3:
-            val= 253;
+            val= 192;
             break;
     }
         step++;
@@ -123,23 +174,60 @@ byte cycle(){
     return val;
 }
 
+bool servoIsEnabled(int id){
+  // TODO: restore this to just return true
+  //return true;
+  return servoEnabled[id];
+}
 
-int cycleInterval = 5000;
+
+int cycleInterval = 10000;
 int msSinceCycle = 0;
 int nominalInterval = 100;
 int msSinceNominal = 0;
-bool doCycle=false;
+
 
 void loopCycle(long delta){
-  if (doCycle){
-    byte id = 0;
+  if (doCycle){   
     if (msSinceCycle >= cycleInterval){
       msSinceCycle=0;
-      byte val = cycle();
-      sendServoSetpointMaxtoDegrees(id,val);
+      performCycleTest();
     }else
       msSinceCycle+=delta;
   }
+}
+
+void performCycleTest(){
+  byte val = cycle();
+       for(int i = 0; i<nbServos; i++){
+        if (servoIsEnabled(i)){
+          MoveServoToByteValue(i, val);
+        }
+      }      
+}
+
+
+void performTest(byte buffer){
+  Debug("In Test Mode. Got buffer "+(String)buffer);
+  int servo;
+  int val;
+  if (buffer == abc.q || buffer == abc.a || buffer == abc.z)
+    servo = 0;
+  if (buffer == abc.w || buffer == abc.s || buffer == abc.x)
+    servo = 1;
+  if (buffer == abc.e || buffer == abc.d || buffer == abc.c)
+    servo = 2;
+  if (buffer == abc.r || buffer == abc.f || buffer == abc.v)
+    servo = 3;   
+
+  if (buffer == abc.q || buffer == abc.w || buffer == abc.e || buffer == abc.r)
+    val = 0;//64;
+  if (buffer == abc.a || buffer == abc.s || buffer == abc.d || buffer == abc.f)
+    val = max(0,OldSerialValue[servo]-testStepSize);
+  if (buffer == abc.z || buffer == abc.x || buffer == abc.c || buffer == abc.v)
+    val = min(OldSerialValue[servo]+testStepSize,maxVal);//255;//192;
+  OldSerialValue[servo]=val;
+  MoveServoToByteValue(servo, val);         
 }
 // ***************** End  Test  Code ********************
 
@@ -154,6 +242,10 @@ void loop()
   {
 //    bufferPrevious = bufferCurrent; // Store previous byte
     byte bufferCurrent = Serial.read(); // Get the new byte
+    if (testMode){
+      performTest(bufferCurrent);
+      return;
+    }
 
     if (isAbove127 == true){        
         Debug("Got a Buffer: "+(String)bufferCurrent+" isAbove127 is set. New Value: "+(String)(bufferCurrent + 128));
@@ -169,14 +261,26 @@ void loop()
     }else if (expectControl){
       expectControl = false;
       // TODO: set bools based on control codes
-      if (bufferCurrent >= leftShoulderCtl && bufferCurrent <= rightWaistCtl){
+      if (bufferCurrent >= leftShoulderCtl && bufferCurrent <= rightWaistCtl){        
+        byte tempServo = bufferCurrent-leftShoulderCtl;
+        if (!servoIsEnabled(tempServo))
+          return;
+        currentServoIndex=tempServo;
         expectServoValue=true;
-        currentServoIndex = bufferCurrent-leftShoulderCtl;
         Debug("Got a control character: "+(String)bufferCurrent+", currentServoIndex: "+(String)currentServoIndex);
       } else if (bufferCurrent >= setRedLeftCtl && bufferCurrent <= setBlueRightCtl){
         expectRGBValue = true;
         currentColorIndex = bufferCurrent-setRedLeftCtl;
         Debug("Got a control character: "+(String)bufferCurrent+", currentColorIndex: "+(String)currentColorIndex);
+      } else if (bufferCurrent >= leftShoulderNeutralCtl && bufferCurrent <= rightWaistNeutralCtl){
+        currentServoIndex = bufferCurrent-leftShoulderNeutralCtl;
+        expectNeutralValue=true;
+      }else if (bufferCurrent == resetCurrentDegreesCtl){
+        for (int i=0; i<nbServos; i++){
+          servoCurrentMaxDegrees[i]=0;
+          servoCurrentMinDegrees[i]=0;
+        }        
+        Debug("Min and Max current values reset");
       }
     }else { 
       bufferCurrent -= (255-maxVal); 
@@ -185,13 +289,16 @@ void loop()
         Debug("Got a value. Gonna set servo: "+(String)currentServoIndex+" to "+(String)bufferCurrent);
         
         if (abs(OldSerialValue[currentServoIndex] - bufferCurrent) > deadZone) {
-          sendServoSetpointMaxtoDegrees(currentServoIndex, CheckForInversion(bufferCurrent, currentServoIndex));
+          MoveServoToByteValue(currentServoIndex, bufferCurrent);
           OldSerialValue[currentServoIndex] = bufferCurrent;
         }
       }else if (expectRGBValue){
         Debug("Got a value. Gonna set LED: "+(String)currentColorIndex+" to "+(String)bufferCurrent);
         expectRGBValue = false;
         //leds.SetColorLevel(currentColorIndex,bufferCurrent);
+      }else if (expectNeutralValue){
+        Debug("Got a NEUTRAL value. Gonna set servo neutral value: "+(String)currentServoIndex+" to "+(String)bufferCurrent);
+        servoNeutralDegrees[currentServoIndex] = mapValueToDegrees(currentServoIndex, bufferCurrent);
       }
     }
   }
@@ -205,43 +312,48 @@ void loop()
 }
 
 
+
 bool monitorCurrents(long delta){
   _currentMonitor->loop();
   bool* nominal = _currentMonitor->isEverythingNominal();
+  printNominal(nominal,delta);
   bool notNominal = false;
   bool wasntNominal = false;
-  printNominal(nominal,delta);
-  do{
-    notNominal = false;
-    // todo change back to nbServos
-    for(int i=0; i<1; i++){
-      if (!nominal[i]){
-        Serial.println("Not Nominal: "+String(i));
-        notNominal=true;
-        wasntNominal=true;
-        int newDegrees = intendedDegrees[i];
-        if (newDegrees> servoNeutralDegrees[i]){
-         newDegrees -=overCurrentDegreeDelta;
-         Serial.println("Too far. New Degrees: "+(String)newDegrees);
-         servoCurrentMaxDegrees[i]= newDegrees;
-        }else{
-         newDegrees+=overCurrentDegreeDelta;
-         Serial.println("Too close. New Degrees: "+(String)newDegrees);
-         servoCurrentMinDegrees[i]=newDegrees;
+  if (currentAutocorrectEnabled){
+    do{
+      notNominal = false;
+      // todo change back to nbServos
+      for(int i=0; i<nbServos; i++){
+        if (!servoIsEnabled(i))
+          continue;
+        if (!nominal[i]){
+          Debug("Not Nominal: "+String(i));
+          notNominal=true;
+          wasntNominal=true;
+          int newDegrees = intendedDegrees[i];
+          if (newDegrees> servoNeutralDegrees[i]){
+            newDegrees -=overCurrentDegreeDelta;
+            Debug("Too far. New Degrees: "+(String)newDegrees);
+            servoCurrentMaxDegrees[i]= newDegrees;
+          }else{
+            newDegrees+=overCurrentDegreeDelta;
+            Debug("Too close. New Degrees: "+(String)newDegrees);
+            servoCurrentMinDegrees[i]=newDegrees;
+          }
+          moveServoToDegrees(i,newDegrees);
         }
-        moveServoToDegrees(i,newDegrees);
       }
+      if(notNominal){
+        Debug("Not Nominal. Gonna wait "+(String)overCurrentDelay+"ms before checking again");
+        delay(overCurrentDelay);
+        nominal = _currentMonitor->onDemandOverCurrentCheck(overCurrentDelay);
+        printNominal(nominal,timeDelta());
+      }
+    }while(notNominal);
+    if (wasntNominal){
+      Debug("Wasn't Nominal, but AG now!!!");
+      delay(postNotNominalDelay);
     }
-    if(notNominal){
-      Serial.println("Not Nominal. Gonna wait "+(String)overCurrentDelay+"ms before checking again");
-      delay(overCurrentDelay);
-      nominal = _currentMonitor->onDemandOverCurrentCheck();
-      printNominal(nominal,timeDelta());
-    }
-  }while(notNominal);
-  if (wasntNominal){
-    Serial.println("Wasn't Nominal, but AG now!!!");
-    delay(postNotNominalDelay);
   }
   return wasntNominal;
 }
@@ -249,13 +361,15 @@ bool monitorCurrents(long delta){
 void printNominal(bool* nominal, long delta){
  if (msSinceNominal >= nominalInterval){
     msSinceNominal=0;
-    for(byte i=0; i<nbServos; i++){      
-      if (i>0)
-        Serial.print(",");
-      Serial.print("Nominal_"+(String)i+":");
-      Serial.print(nominal[i]);
+    if (shouldPrintNominal){
+      for(byte i=0; i<nbServos; i++){      
+        if (i>0)
+          Serial.print(",");
+        Serial.print("Nominal_"+(String)i+":");
+        Serial.print(nominal[i]);
+      }
+      Serial.println();
     }
-    Serial.println();
   }else
     msSinceNominal+=delta;
 }
@@ -264,34 +378,49 @@ int mapValueToDegrees(byte servoID, int val ){
 
   val = constrain(val, 0, maxVal); // constrain cut above and below: clipping and not scaling (like map)
 
-  return = map(val, 0, maxVal, servoHomeDegrees[servoID], servoEndDegrees[servoID]);
+  return map(val, 0, maxVal, servoHomeDegrees[servoID], servoEndDegrees[servoID]);
 
 }
 
-void sendServoSetpointMaxtoDegrees(byte servoID, int val )
+void MoveServoToByteValue(byte servoID, int val )
 {
-  int targetDegrees mapValueToDegrees(servoID,val);
+  val = CheckForInversion(val, servoID);
+  int targetDegrees = mapValueToDegrees(servoID,val);
+  Debug("Attempting to move servo "+(String)servoID+" to val "+(String)val+" at targetDegrees "+(String)targetDegrees);
 
-  int neutralDegrees =servoNeutralDegrees[i];
-  if (neutralDegrees!=0 && servoCurrentMaxDegrees[i]!=0){
-    if (targetDegrees < neutralDegrees)
-      targetDegrees = map(targetDegrees,0, neutralDegrees,servoCurrentMinDegrees[i],neutralDegrees);
-    else
-      targetDegrees = map(targetDegrees, neutralDegrees, neutralDegrees, servoCurrentMaxDegrees[i]);
-  }
+  int neutralDegrees =servoNeutralDegrees[servoID];
+  if (neutralDegrees!=0){
+    int newDegrees = targetDegrees;
+    if (targetDegrees < neutralDegrees){
+      if (servoCurrentMinDegrees[servoID]!=0){        
+        newDegrees = map(targetDegrees,servoHomeDegrees[servoID], neutralDegrees, servoCurrentMinDegrees[servoID],neutralDegrees);
+        Debug("targetDegrees is below neutralDegrees. Mapped "+(String)targetDegrees+" to "+(String)newDegrees);
+      }else
+        Debug("targetDegrees is below neutralDegrees, but... servoCurrentMinDegrees[servoID] == "+(String)servoCurrentMinDegrees[servoID]);
+    }
+    else{
+      if (servoCurrentMaxDegrees[servoID]!=0){
+        newDegrees = map(targetDegrees, neutralDegrees, servoEndDegrees[servoID], neutralDegrees, servoCurrentMaxDegrees[servoID]);
+        Debug("targetDegrees is above neutralDegrees. Mapped "+(String)targetDegrees+" to "+(String)newDegrees);
+      }else
+        Debug("targetDegrees is above neutralDegrees, but... servoCurrentMaxDegrees[servoID] == "+(String)servoCurrentMaxDegrees[servoID]);
+    }
+    targetDegrees = newDegrees;
+  }else
+    Debug("Neutral Degrees is zero. no need to map anything");
 
   moveServoToDegrees(servoID, targetDegrees);
-  
 }
 
 void moveServoToDegrees(byte servoID, int targetDegrees){
   //Translate the 180 degree range into the equivalent based on the native range. 
-  double nativeRatio = (double)180/(double)servoNativeDegrees[servoID];
-  targetDegrees = (int)((double)targetDegrees*nativeRatio);
-
-  myServo[servoID].write(targetDegrees);              // tell servo to go to position in variable : in steps of 1 degree
   intendedDegrees[servoID]=targetDegrees;
-  Debug("Servo ID: "+(String)servoID+", degrees: "+(String)targetDegrees); //val: "+(String)val+",
+
+  double nativeRatio = 180.0/(double)servoNativeDegrees[servoID];
+  int newTargetDegrees = (int)(((double)targetDegrees)*nativeRatio);
+
+  myServo[servoID].write(newTargetDegrees);              // tell servo to go to position in variable : in steps of 1 degree
+  Debug("Writing Servo ID "+(String)servoID+" to degrees "+(String)newTargetDegrees+" using nativeRatio "+(String)nativeRatio); //val: "+(String)val+",
 }
 
 int CheckForInversion(int val, int servoIndex){
@@ -305,7 +434,7 @@ void MoveAllServosMaxtoDegrees( int target)
 {
   // send all servos to home
   for (byte i = 0; i < nbServos; i++) {
-    sendServoSetpointMaxtoDegrees(i, CheckForInversion(target, i));
+    MoveServoToByteValue(i, target);
   }
 }
 
@@ -321,3 +450,5 @@ long timeDelta(){
   previousTime = currentTime;
   return delta;
 }
+
+
