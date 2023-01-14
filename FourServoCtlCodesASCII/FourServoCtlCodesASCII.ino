@@ -4,7 +4,7 @@
 
 //LEDFunctions leds;
 
-bool shouldDebug = true;
+bool shouldDebug = false;
 bool testMode=true;
 bool shouldPrintNominal = true;
 bool shouldPrintAmps = true;
@@ -80,8 +80,8 @@ long previousTime=0;
 
 CurrentMonitor* _currentMonitor;
 double _currentThreshold = 2.5;
-double _maxCurrent = 4.0;
-long _overCurrentTimeout = 500;
+double _maxCurrent = 5.0;
+long _overCurrentTimeout = 200;
 long _maxOverCurrentTimeout = 2000;
 int overCurrentDegreeDelta = 3;
 long overCurrentDelay=100;
@@ -108,17 +108,19 @@ void setup()
     }
     
   // move the servos to signal startup
-  MoveAllServosMaxtoDegrees(0); // Max
+  MoveAllServosToByteVal(0); // Max
   delay(1000);
   // send all servos to home
-  for (byte i = 0; i < nbServos; i++) {    
-    moveServoToDegrees(i,servoNeutralDegrees[i]);
-    OldSerialValue[i]=127;
-  }
-  // MoveAllServosMaxtoDegrees(20);
+  // for (byte i = 0; i < nbServos; i++) {    
+  //   moveServoToDegrees(i,servoNeutralDegrees[i]);
+  //   OldSerialValue[i]=127;
+  // }
+  moveAllServosToNeutral();
+
+  // MoveAllServosToByteVal(20);
   // delay(1000);
 
-  // MoveAllServosMaxtoDegrees(50);
+  // MoveAllServosToByteVal(50);
   // delay(1000);
 
   //leds.setup();
@@ -239,7 +241,6 @@ void performTest(byte buffer){
     val = min(OldSerialValue[servo]+testStepSize,maxVal);//255;//192;
   
   if(servo >=0 && val >=0){
-    OldSerialValue[servo]=val;
     MoveServoToByteValue(servo, val);         
   }else{
     double stepSize = .25;
@@ -257,6 +258,8 @@ void performTest(byte buffer){
       _currentMonitor->incrementFakeCurrentDecrementTimeout(-100);
     if (buffer == abc.y)
       findTheLimit(); 
+    if (buffer == abc.b)
+      moveAllServosToNeutral();
   }
 
 }
@@ -265,7 +268,7 @@ void performTest(byte buffer){
 void performShutdown(){
   shutdownInitiated=true;
   Serial.println("Performing Critical Shutdown!");
-  MoveAllServosMaxtoDegrees(100);
+  moveAllServosToNeutral();
   if (neutralCausedShutdown){
     Serial.println("Shutdown caused by neutral position issue. Detaching servos.");
     delay(1000);
@@ -344,7 +347,6 @@ void loop()
         
         if (abs(OldSerialValue[currentServoIndex] - bufferCurrent) > deadZone) {
           MoveServoToByteValue(currentServoIndex, bufferCurrent);
-          OldSerialValue[currentServoIndex] = bufferCurrent;
         }
       }else if (expectRGBValue){
         Debug("Got a value. Gonna set LED: "+(String)currentColorIndex+" to "+(String)bufferCurrent);
@@ -352,7 +354,7 @@ void loop()
         //leds.SetColorLevel(currentColorIndex,bufferCurrent);
       }else if (expectNeutralValue){
         Debug("Got a NEUTRAL value. Gonna set servo neutral value: "+(String)currentServoIndex+" to "+(String)bufferCurrent);
-        servoNeutralDegrees[currentServoIndex] = mapValueToDegrees(currentServoIndex, bufferCurrent);
+        servoNeutralDegrees[currentServoIndex] = mapByteValueToDegrees(currentServoIndex, bufferCurrent);
       }
     }
   }
@@ -370,14 +372,22 @@ void serial_flush() {
   delay(10);
 }
 
+void moveAllServosToNeutral(){
+  for (int i = 0; i < nbServos; i++)
+  {
+    moveServoToNeutral(i);
+  }  
+}
+
+void moveServoToNeutral(int servoId){
+  MoveServoToByteValue(servoId, mapDegreesToByteValue(servoId, servoNeutralDegrees[servoId]));
+}
 
 void findTheLimit(){
   findingTheLimit=true;
   resetCurrentDegrees();
-  //MoveAllServosMaxtoDegrees(0);
-  for(int i=0; i<nbServos; i++){
-    moveServoToDegrees(i,0);
-  }
+  //MoveAllServosToByteVal(0);
+  moveAllServosToNeutral();
   delay(1000);
   limitMsSinceIncrement=0;
 }
@@ -408,7 +418,8 @@ void findTheLimitAction(long delta){
         findingTheLimit=false;
         for(int i=0; i<nbServos; i++){
           Debug((String)i+" Neutral: "+(String)servoNeutralDegrees[i]+", ");
-          moveServoToDegrees(i, servoNeutralDegrees[i]);
+          //moveServoToDegrees(i, servoNeutralDegrees[i]);
+          moveAllServosToNeutral();
         }
       }
     }
@@ -505,7 +516,7 @@ void printNominal(bool* nominal, long delta){
     msSinceNominal+=delta;
 }
 
-int mapValueToDegrees(byte servoID, int val ){
+int mapByteValueToDegrees(byte servoID, int val ){
 
   val = constrain(val, 0, maxVal); // constrain cut above and below: clipping and not scaling (like map)
 
@@ -513,9 +524,15 @@ int mapValueToDegrees(byte servoID, int val ){
 
 }
 
+int mapDegreesToByteValue(byte servoID, int degrees){
+  int val = map(degrees, servoHomeDegrees[servoID], servoEndDegrees[servoID], 0, maxVal);
+  return val;
+}
+
 void MoveServoToByteValue(byte servoID, int val )
 {
-  int targetDegrees = mapValueToDegrees(servoID,val);
+  OldSerialValue[servoID] = val;
+  int targetDegrees = mapByteValueToDegrees(servoID,val);
   Debug("Attempting to move servo "+(String)servoID+" to val "+(String)val+" at targetDegrees "+(String)targetDegrees);
 
   int neutralDegrees =servoNeutralDegrees[servoID];
@@ -569,7 +586,7 @@ int CheckForInversion(int servoIndex, int targetDegrees){
     return targetDegrees;
 }
 
-void MoveAllServosMaxtoDegrees( int target)
+void MoveAllServosToByteVal( int target)
 {
   // send all servos to home
   for (byte i = 0; i < nbServos; i++) {
