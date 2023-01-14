@@ -2,19 +2,26 @@
 #include "CurrentMonitor.h"
 #include "Arduino.h"
 
-CurrentMonitor::CurrentMonitor(int nbServos, int* currentSensorPins, double currentThreshold, long overCurrentTimeout, bool shouldPrintAmps) //:
+CurrentMonitor::CurrentMonitor(int nbServos, int* currentSensorPins, double currentThreshold, double maxCurrent, long overCurrentTimeout, long maxTimeout, bool shouldPrintAmps) //:
   //_nbServos(nbServos), _currentSensorPins(currentSensorPins), _currentThreshold(currentThreshold), _overCurrentTimeout(overCurrentTimeout)
 {
+  _sensorsFunctioningProperly = true;
   _nbServos=nbServos;
   _currentSensorPins=currentSensorPins;
   _currentThreshold=currentThreshold;
+  _maxCurrent = maxCurrent;
   _overCurrentTimeout=overCurrentTimeout;
+  _maxTimeout = maxTimeout;
   long* overCurrentDurations = new long[nbServos];
   _overCurrentDurations = overCurrentDurations;
   _nominal = new bool[_nbServos];
   _amps = new double[_nbServos];
   _samples = new double[_nbServos];
   _avgAcs = new double[_nbServos];
+  _sensorOffsets = new double[_nbServos];
+  _fakeCurrentOffset = new double[_nbServos];
+  _fakeCurrentBuffer = new double[_nbServos];
+  _fakeCurrentMsSinceDecrementRequest= new long[nbServos];
   for (int i=0; i<_nbServos; i++){
      _overCurrentDurations[i] = 0;
     _nominal[i] = true;
@@ -22,8 +29,12 @@ CurrentMonitor::CurrentMonitor(int nbServos, int* currentSensorPins, double curr
     _samples[i] =0.0;
     _avgAcs[i] = 0.0;
     _sensorOffsets[i]=0.0;
+    _fakeCurrentOffset[i]=0.0;
+    _fakeCurrentBuffer[i]=0.0;
+    _fakeCurrentMsSinceDecrementRequest[i]=0;
   }
   _shouldPrintAmps=shouldPrintAmps;
+
 }
 
 void CurrentMonitor::setup() {
@@ -55,6 +66,12 @@ void CurrentMonitor::loop() {
     this->msSinceMeasure += delta;
   }
 
+
+  fakeCurrentAction(delta);
+}
+
+bool CurrentMonitor::isFunctioningProperly(){
+  return _sensorsFunctioningProperly;
 }
 
 bool* CurrentMonitor::isEverythingNominal() {
@@ -72,10 +89,16 @@ void CurrentMonitor::updateDurations(long durationDelta){
       } else {
         _overCurrentDurations[i] = _overCurrentDurations[i] +(durationDelta);
       }
+      if ( _overCurrentDurations[i] > _maxTimeout){
+        _sensorsFunctioningProperly=false;
+        Serial.println("Servo "+(String)i+" has been overCurrent for "+(String)_overCurrentDurations[i]+"ms, over the limit of "+(String)_maxTimeout+"ms. NO BUENO.");
+        return;
+      }    
     }
 }
 
 bool* CurrentMonitor::onDemandOverCurrentCheck(long durationDelta) {
+  fakeCurrentAction(durationDelta);
   calculateAmps();
   printAmps(true);
   nominalCheck();  
@@ -103,6 +126,14 @@ void CurrentMonitor::printAmps(bool forcePrint) {
   }  
 }
 
+void CurrentMonitor::setCurrentThreshold(double currentThreshold){
+  _currentThreshold=currentThreshold;
+}
+
+double CurrentMonitor::getCurrentThreshold(){
+  return _currentThreshold;
+}
+
 long CurrentMonitor::monitorTimeDelta() {
   unsigned long currentTime = millis();
   long delta = (long)(currentTime - this->_previousTime);
@@ -124,7 +155,15 @@ void CurrentMonitor::calibrateSensors(){
 void CurrentMonitor::calculateAmps() {
   calculateAmpsRaw(10);
   for(int i = 0; i < _nbServos; i++) {
-    _amps[i] = _amps[i]-_sensorOffsets[i];
+    _amps[i] = (_amps[i]-_sensorOffsets[i])+_fakeCurrentOffset[i];
+    if ((String)_amps[i] == "ovf"){
+      Serial.println("Amp "+(String)i+" is reporting ovf. Not good.");
+      _sensorsFunctioningProperly=false;
+    }
+    if (_amps[i]>=_maxCurrent){
+       Serial.println("Amp "+(String)i+" is over the max current of "+(String)_maxCurrent+" reporting "+(String)_amps[i]+". VERY BAD.");
+      _sensorsFunctioningProperly=false;
+    }
   }
 }
 
@@ -171,5 +210,49 @@ void CurrentMonitor::calculateAmpsRaw(int numSamples){
   delete AvgAcs;
 }
 
+void CurrentMonitor::incrementFakeCurrent(int servoId, double stepSize){
+  _fakeCurrentBuffer[servoId] = _fakeCurrentBuffer[servoId]+stepSize;
+  _fakeCurrentMsSinceDecrementRequest[servoId]=0;
+}
 
+void CurrentMonitor::fakeCurrentAction(long delta){
+  if (_fakeCurrentInterval == 0)
+    return;
+  _fakeCurrentMsSinceChange+=delta;
+  if (_fakeCurrentMsSinceChange >=_fakeCurrentInterval){
+    double stepSize = _fakeCurrentStepSize * (((double)_fakeCurrentMsSinceChange)/_fakeCurrentInterval);
+    for(int i=0; i<_nbServos; i++){
+      int servoId=i;
+      // Check for decrement requests
+      if (_fakeCurrentMsSinceDecrementRequest[servoId]!=0){
+        _fakeCurrentMsSinceDecrementRequest[servoId] = _fakeCurrentMsSinceDecrementRequest[servoId]+_fakeCurrentMsSinceChange;
+        if (_fakeCurrentMsSinceDecrementRequest[servoId] >= _fakeCurrentDecrementTimeout){
+          _fakeCurrentBuffer[servoId] = _fakeCurrentOffset[servoId] *-1;
+          _fakeCurrentMsSinceDecrementRequest[servoId] = 0;
+        }
+      }
+
+
+      double buffer = _fakeCurrentBuffer[i];
+      if (buffer!=0){
+        double actualStep = min(((stepSize*buffer)/abs(buffer)), buffer);
+        _fakeCurrentOffset[i] = _fakeCurrentOffset[i] + actualStep;
+        _fakeCurrentBuffer[i] = _fakeCurrentBuffer[i] - actualStep;
+
+        // Kick off decrement request
+        if (_fakeCurrentBuffer[i] == 0 && _fakeCurrentOffset[i]>0)
+          _fakeCurrentMsSinceDecrementRequest[servoId]=1;
+      }
+    }
+     _fakeCurrentMsSinceChange=0;
+  }
+}
+
+void CurrentMonitor::incrementFakeCurrentDecrementTimeout(long stepSize){
+  _fakeCurrentDecrementTimeout+=stepSize;
+  for(int i=0; i<3; i++){
+    Serial.println("FakeCurrentTimeout:"+(String)((double)_fakeCurrentDecrementTimeout/1000));
+    delay(100);
+  }
+}
 
