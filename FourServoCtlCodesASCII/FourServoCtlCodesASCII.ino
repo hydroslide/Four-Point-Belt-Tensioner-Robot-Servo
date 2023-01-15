@@ -5,9 +5,10 @@
 //LEDFunctions leds;
 
 bool shouldDebug = false;
-bool testMode=false;
+bool testMode=true;
+bool initialAngleTest = false;
 bool shouldPrintNominal = false;
-bool shouldPrintAmps = false;
+bool shouldPrintAmps = true;
 bool currentAutocorrectEnabled = true;
 const byte testStepSize=10;
 
@@ -57,6 +58,8 @@ int servoEndDegrees[nbServos] = { 170,170,170,170}; // leftthigh, rightthigh, le
 int currentServoIndex = 0;
 
 int servoNativeDegrees[nbServos] = { 360,360,270,270}; 
+int servoRotationOffsetDegrees[nbServos] = {135,135,90,90}; 
+bool useRotationOffset = true;
 
 int servoNeutralDegrees[nbServos] = {60,60,60,60};
 int servoCurrentMinDegrees[nbServos] = { 0, 0, 0, 0}; //Based on known physical restrictions in available range of movement.
@@ -88,13 +91,17 @@ long overCurrentDelay=100;
 long postNotNominalDelay = 100;
 
 bool findingTheLimit = false;
-long limitTimeoutMs=(180/overCurrentDegreeDelta)*overCurrentDelay+(overCurrentDelay*4)+_overCurrentTimeout;
+//long limitTimeoutMs=(180/overCurrentDegreeDelta)*overCurrentDelay+(overCurrentDelay*4)+_overCurrentTimeout;
 long limitMsElapsed=0;
 long limitMsSinceIncrement=0;
+
+int nominalInterval = 100;
+int msSinceNominal = 0;
 
 
 void setup()
 {
+  
   _currentMonitor = new CurrentMonitor(nbServos,  currentSensorPins, _currentThreshold, _maxCurrent, _overCurrentTimeout, _maxOverCurrentTimeout, shouldPrintAmps);
 
     Serial.begin(115200); // opens serial port at specified baud rate
@@ -106,178 +113,22 @@ void setup()
     // pinMode(servoPin[i], OUTPUT); // done within the library
     myServo[i].attach(servoPin[i],500,2500);  // attaches the servo on servoPin pin
     }
-    
+
+  if (initialAngleTest)
+    return;
+
   // move the servos to signal startup
   MoveAllServosToByteVal(0); // Max
   delay(1000);
-  // send all servos to home
-  // for (byte i = 0; i < nbServos; i++) {    
-  //   moveServoToDegrees(i,servoNeutralDegrees[i]);
-  //   OldSerialValue[i]=127;
-  // }
+
   moveAllServosToNeutral();
 
-  // MoveAllServosToByteVal(20);
-  // delay(1000);
-
-  // MoveAllServosToByteVal(50);
-  // delay(1000);
 
   //leds.setup();
 
 
 }
 
-// ***************** Begin Test Code ********************
-struct ABC {
-  int a = 97;
-  int b = 98;
-  int c = 99;
-  int d = 100;
-  int e = 101;
-  int f = 102;
-  int g = 103;
-  int h = 104;
-  int i = 105;
-  int j = 106;
-  int k = 107;
-  int l = 108;
-  int m = 109;
-  int n = 110;
-  int o = 111;
-  int p = 112;
-  int q = 113;
-  int r = 114;
-  int s = 115;
-  int t = 116;
-  int u = 117;
-  int v = 118;
-  int w = 119;
-  int x = 120;
-  int y = 121;
-  int z = 122;
-};
-
-
-ABC abc;
-
-
-int step = 0;
-
-byte cycle(){
-
-    byte val = 0;
-    switch(step){
-        case 0:
-            val= 64;
-            break;
-        case 1:
-            val= 100;
-            break;
-        case 2:
-            val= 64;
-            break;
-        case 3:
-            val= 192;
-            break;
-    }
-        step++;
-    if (step>3)
-      step=0;
-    return val;
-}
-
-bool servoIsEnabled(int id){
-  // TODO: restore this to just return true
-  //return true;
-  return servoEnabled[id];
-}
-
-
-int cycleInterval = 10000;
-int msSinceCycle = 0;
-int nominalInterval = 100;
-int msSinceNominal = 0;
-
-
-void loopCycle(long delta){
-  if (doCycle){   
-    if (msSinceCycle >= cycleInterval){
-      msSinceCycle=0;
-      performCycleTest();
-    }else
-      msSinceCycle+=delta;
-  }
-}
-
-void performCycleTest(){
-  byte val = cycle();
-       for(int i = 0; i<nbServos; i++){
-        if (servoIsEnabled(i)){
-          MoveServoToByteValue(i, val);
-        }
-      }      
-}
-
-
-void performTest(byte buffer){
-  //Debug("In Test Mode. Got buffer "+(String)buffer);
-  int servo=-1;
-  int val=-1;
-  if (buffer == abc.q || buffer == abc.a || buffer == abc.z || buffer == abc.u)
-    servo = 0;
-  if (buffer == abc.w || buffer == abc.s || buffer == abc.x || buffer == abc.i)
-    servo = 1;
-  if (buffer == abc.e || buffer == abc.d || buffer == abc.c || buffer == abc.o)
-    servo = 2;
-  if (buffer == abc.r || buffer == abc.f || buffer == abc.v || buffer == abc.p)
-    servo = 3;   
-
-  if (buffer == abc.q || buffer == abc.w || buffer == abc.e || buffer == abc.r)
-    val = 0;//64;
-  if (buffer == abc.a || buffer == abc.s || buffer == abc.d || buffer == abc.f)
-    val = max(0,OldSerialValue[servo]-testStepSize);
-  if (buffer == abc.z || buffer == abc.x || buffer == abc.c || buffer == abc.v)
-    val = min(OldSerialValue[servo]+testStepSize,maxVal);//255;//192;
-  
-  if(servo >=0 && val >=0){
-    MoveServoToByteValue(servo, val);         
-  }else{
-    double stepSize = .25;
-    if (buffer == abc.l)
-      _currentMonitor->setCurrentThreshold(_currentMonitor->getCurrentThreshold()+stepSize);
-    if (buffer == abc.k)
-      _currentMonitor->setCurrentThreshold(_currentMonitor->getCurrentThreshold()-stepSize);
-    if (buffer == abc.j)
-      resetCurrentDegrees();
-    if (buffer == abc.p  ||buffer == abc.o ||buffer == abc.i ||buffer == abc.u)
-      _currentMonitor->incrementFakeCurrent(servo, stepSize);
-    if (buffer == abc.m) 
-      _currentMonitor->incrementFakeCurrentDecrementTimeout(100);
-    if (buffer == abc.n) 
-      _currentMonitor->incrementFakeCurrentDecrementTimeout(-100);
-    if (buffer == abc.y)
-      findTheLimit(); 
-    if (buffer == abc.b)
-      moveAllServosToNeutral();
-  }
-
-}
-// ***************** End  Test  Code ********************
-
-void performShutdown(){
-  shutdownInitiated=true;
-  Serial.println("Performing Critical Shutdown!");
-  moveAllServosToNeutral();
-  if (neutralCausedShutdown){
-    Serial.println("Shutdown caused by neutral position issue. Detaching servos.");
-    delay(1000);
-    for (byte i = 0; i < nbServos; i++) {
-      myServo[i].detach();
-    }
-  }
-  Serial.println("Shutdown complete. Ignoring all further commands. Please Reboot.");
-}
 
 void loop()
 {
@@ -286,6 +137,9 @@ void loop()
       performShutdown();
     return;
   }
+
+  if (initialAngleTest)
+    return;
 
   long delta = timeDelta();
 
@@ -367,6 +221,21 @@ void loop()
   loopCycle(delta);
 }
 
+
+void performShutdown(){
+  shutdownInitiated=true;
+  Serial.println("Performing Critical Shutdown!");
+  moveAllServosToNeutral();
+  if (neutralCausedShutdown){
+    Serial.println("Shutdown caused by neutral position issue. Detaching servos.");
+    delay(1000);
+    for (byte i = 0; i < nbServos; i++) {
+      myServo[i].detach();
+    }
+  }
+  Serial.println("Shutdown complete. Ignoring all further commands. Please Reboot.");
+}
+
 void serial_flush() {
   while (Serial.available()) Serial.read();
   delay(10);
@@ -386,7 +255,6 @@ void moveServoToNeutral(int servoId){
 void findTheLimit(){
   findingTheLimit=true;
   resetCurrentDegrees();
-  //MoveAllServosToByteVal(0);
   moveAllServosToNeutral();
   delay(1000);
   limitMsSinceIncrement=0;
@@ -570,7 +438,10 @@ void moveServoToDegrees(byte servoID, int targetDegrees){
 
   targetDegrees = CheckForInversion(servoID, targetDegrees);
 
-  
+  // Apply the rotation offset if desired
+  if(useRotationOffset && servoRotationOffsetDegrees[servoID] != 0){
+    targetDegrees = targetDegrees+servoRotationOffsetDegrees[servoID];
+  }
 
   //Translate the 180 degree range into the equivalent based on the native range. 
   double nativeRatio = 180.0/(double)servoNativeDegrees[servoID];
@@ -613,3 +484,138 @@ long timeDelta(){
 }
 
 
+// ***************** Begin Test Code ********************
+struct ABC {
+  int a = 97;
+  int b = 98;
+  int c = 99;
+  int d = 100;
+  int e = 101;
+  int f = 102;
+  int g = 103;
+  int h = 104;
+  int i = 105;
+  int j = 106;
+  int k = 107;
+  int l = 108;
+  int m = 109;
+  int n = 110;
+  int o = 111;
+  int p = 112;
+  int q = 113;
+  int r = 114;
+  int s = 115;
+  int t = 116;
+  int u = 117;
+  int v = 118;
+  int w = 119;
+  int x = 120;
+  int y = 121;
+  int z = 122;
+};
+
+
+ABC abc;
+
+
+int step = 0;
+
+byte cycle(){
+
+    byte val = 0;
+    switch(step){
+        case 0:
+            val= 64;
+            break;
+        case 1:
+            val= 100;
+            break;
+        case 2:
+            val= 64;
+            break;
+        case 3:
+            val= 192;
+            break;
+    }
+        step++;
+    if (step>3)
+      step=0;
+    return val;
+}
+
+bool servoIsEnabled(int id){
+  // TODO: restore this to just return true
+  //return true;
+  return servoEnabled[id];
+}
+
+
+int cycleInterval = 10000;
+int msSinceCycle = 0;
+
+
+
+void loopCycle(long delta){
+  if (doCycle){   
+    if (msSinceCycle >= cycleInterval){
+      msSinceCycle=0;
+      performCycleTest();
+    }else
+      msSinceCycle+=delta;
+  }
+}
+
+void performCycleTest(){
+  byte val = cycle();
+       for(int i = 0; i<nbServos; i++){
+        if (servoIsEnabled(i)){
+          MoveServoToByteValue(i, val);
+        }
+      }      
+}
+
+
+void performTest(byte buffer){
+  //Debug("In Test Mode. Got buffer "+(String)buffer);
+  int servo=-1;
+  int val=-1;
+  if (buffer == abc.q || buffer == abc.a || buffer == abc.z || buffer == abc.u)
+    servo = 0;
+  if (buffer == abc.w || buffer == abc.s || buffer == abc.x || buffer == abc.i)
+    servo = 1;
+  if (buffer == abc.e || buffer == abc.d || buffer == abc.c || buffer == abc.o)
+    servo = 2;
+  if (buffer == abc.r || buffer == abc.f || buffer == abc.v || buffer == abc.p)
+    servo = 3;   
+
+  if (buffer == abc.q || buffer == abc.w || buffer == abc.e || buffer == abc.r)
+    val = 0;//64;
+  if (buffer == abc.a || buffer == abc.s || buffer == abc.d || buffer == abc.f)
+    val = max(0,OldSerialValue[servo]-testStepSize);
+  if (buffer == abc.z || buffer == abc.x || buffer == abc.c || buffer == abc.v)
+    val = min(OldSerialValue[servo]+testStepSize,maxVal);//255;//192;
+  
+  if(servo >=0 && val >=0){
+    MoveServoToByteValue(servo, val);         
+  }else{
+    double stepSize = .25;
+    if (buffer == abc.l)
+      _currentMonitor->setCurrentThreshold(_currentMonitor->getCurrentThreshold()+stepSize);
+    if (buffer == abc.k)
+      _currentMonitor->setCurrentThreshold(_currentMonitor->getCurrentThreshold()-stepSize);
+    if (buffer == abc.j)
+      resetCurrentDegrees();
+    if (buffer == abc.p  ||buffer == abc.o ||buffer == abc.i ||buffer == abc.u)
+      _currentMonitor->incrementFakeCurrent(servo, stepSize);
+    if (buffer == abc.m) 
+      _currentMonitor->incrementFakeCurrentDecrementTimeout(100);
+    if (buffer == abc.n) 
+      _currentMonitor->incrementFakeCurrentDecrementTimeout(-100);
+    if (buffer == abc.y)
+      findTheLimit(); 
+    if (buffer == abc.b)
+      moveAllServosToNeutral();
+  }
+
+}
+// ***************** End  Test  Code ********************

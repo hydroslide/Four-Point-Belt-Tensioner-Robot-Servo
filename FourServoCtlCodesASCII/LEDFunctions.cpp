@@ -7,7 +7,7 @@ long rgbTimeoutMs = 30000;
 long msSinceLastRGB = 0;
 long msSinceLastShow = 0;
 
-unsigned long previousTime=0;
+//unsigned long previousTime=0;
 bool useRainbow=true;
 
 byte lr;
@@ -59,10 +59,14 @@ void LEDFunctions::LedLoop() {
 }
 
  long LEDFunctions::TimeDelta(){
+  /*
+  // TODO: Make this work again
   unsigned long currentTime = millis();
    long delta = (long)(currentTime-previousTime);
   previousTime = currentTime;
   return delta;
+  */
+ return 0;
 }
 
 void LEDFunctions::SetColorLevel(byte colorIndex, byte value){
