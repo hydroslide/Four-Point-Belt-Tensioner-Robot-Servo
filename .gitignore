@@ -1,2 +1,4 @@
 desktop.ini
 .DS_Store
+.vscode/c_cpp_properties.json
+FourServoCtlCodesASCII/.theia/launch.json
