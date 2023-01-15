@@ -19,13 +19,55 @@ GetTensionUtils = function () {
     var ctlCount = 2;
     var valCount = 255 - ctlCount;
 
-    var ctlCode = 1;
+                             root["neutralSet"] = 0;
 
-    var lsCtl = 3;
-    var rsCtl = 4;
-    var lwCtl = 5;
-    var rwCtl = 6;
+    var ctlCodes = {
+        // COntrol Codes
+        above127: 0,
+        control: 1,
+        leftShoulder: 3,
+        rightShoulder: 4,
+        leftWaist: 5,
+        rightWaist: 6,
+        forceSleep: 7,
+        setRedLeft: 8,
+        setGreenLeft: 9,
+        setBlueLeft: 10,
+        setRedRight: 11,
+        setGreenRight: 12,
+        setBlueRight: 13,
+        leftShoulderNeutral: 14,
+        rightShoulderNeutral: 15,                                                                                     
+        leftWaistNeutral: 16,
+        rightWaistNeutral: 17,
+        resetCurrentDegrees:18,
+        findTheLimitsCtl:19
+    }
 
+    /*
+    function defaultToNeutralIfNotRunning(command) {
+        if ($prop('DataCorePlugin.GameRunning')!=0) {
+          root["neutralSet"] = 0;
+        }
+        else {
+          //return "Neutral Set: "+root["neutralSet"];  
+          command = "";
+          if (root["neutralSet"]<50) {
+            //root["neutralSet"] += 1;
+            //return "CCC";
+            // command = concatCommand(command, ctlCodes.leftShoulderNeutral, getCommandValFromAbs(lsnPos));
+            // command = concatCommand(command, ctlCodes.rightShoulderNeutral, getCommandValFromAbs(rsnPos));
+            // command = concatCommand(command, ctlCodes.leftWaistNeutral, getCommandValFromAbs(lwnPos));
+            // command = concatCommand(command, ctlCodes.rightWaistNeutral, getCommandValFromAbs(rwnPos));
+            command = concatCommand(command, ctlCodes.leftShoulder, getCommandValFromAbs(lsnPos));
+            command = concatCommand(command, ctlCodes.rightShoulder, getCommandValFromAbs(rsnPos));
+            command = concatCommand(command, ctlCodes.leftWaist, getCommandValFromAbs(lwnPos));
+            command = concatCommand(command, ctlCodes.rightWaist, getCommandValFromAbs(rwnPos));
+          }
+        }
+        return command;
+      }
+*/
     function calcAbsFromPct(pct) {
         return (pct / 100) * (valCount);
     }
@@ -40,12 +82,11 @@ GetTensionUtils = function () {
     var rwnPos = calcAbsFromPct(rwn);
 
     function concatCommand(command, servoIndex, val) {
-        var above127Ctl = 0;
-        command = command.concat(String.fromCharCode(ctlCode));
+        command = command.concat(String.fromCharCode(ctlCodes.control));
         command = command.concat(String.fromCharCode(servoIndex));
         if (val > 127) {
             val -= 127;
-            command = command.concat(String.fromCharCode(above127Ctl));
+            command = command.concat(String.fromCharCode(ctlCodes.above127));
         }
         val = Math.min(~~val, 127);
         command = command.concat(String.fromCharCode(~~val));
@@ -72,10 +113,7 @@ GetTensionUtils = function () {
     }
 
     return {
-        lsCtl,
-        rsCtl,
-        lwCtl,
-        rwCtl,
+        ctlCodes,
         lsn,
         rsn,
         lwn,
@@ -90,7 +128,6 @@ GetTensionUtils = function () {
         rwMin,
         ctlCount,
         valCount,
-        ctlCode,
         lsnPos,
         rsnPos,
         lwnPos,
@@ -99,7 +136,7 @@ GetTensionUtils = function () {
         applyNeutralOffset,
         getMaxTensionPos,
         getMinTensionPos,
-        getCommandValFromAbs
+        getCommandValFromAbs,
     }
 
 }
