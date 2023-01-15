@@ -1,0 +1,464 @@
+{
+  "AutomaticReconnect": true,
+  "SerialPortName": "COM7",
+  "StartupDelayMs": 5000,
+  "IsConnecting": false,
+  "IsEnabled": true,
+  "LogIncomingData": true,
+  "IsConnected": true,
+  "BaudRate": 115200,
+  "UpdateMessages": [
+    {
+      "Message": {
+        "Interpreter": 1,
+        "Expression": "var utils = GetTensionUtils();\r\n\r\nvar command = \"\";\r\n\r\nfunction SmoothItOut(servoName, val) {\r\n  // Low-pass IIR filtering of left and right tension values\r\n  var key = servoName + 'B4';\r\n  if (null == root[key]) {\r\n    root[key] = val;\t// initialize\r\n  }\r\n  var valB4 = root[key]; // previously filtered values\r\n  var tc = 1 + $prop('Settings.smooth');\r\n  valB4 += (val - valB4) / tc;\r\n  root[key] = valB4;\r\n  return valB4;\r\n}\r\n\r\nfunction ApplyMaxMin(val, minVal, maxVal) {\r\n  if (val > 0)\r\n    return val * maxVal;\r\n  else\r\n    return val * minVal;\r\n}\r\n\r\nfunction GetGForceCommand(){\r\n\r\n  // G-forces from SimHub properties\r\n  /*\r\n  var gforce_x = $prop('ShakeITMotorsV3Plugin.Export.LateralGforce.Right')-$prop('ShakeITMotorsV3Plugin.Export.LateralGforce.Left')// acceleration\r\n  var gforce_y = $prop('ShakeITMotorsV3Plugin.Export.DecelGforce.Front') - $prop('ShakeITMotorsV3Plugin.Export.AccelGforce.Rear')// \r\n  var gforce_z = 0;//\r\n  */\r\n  var gForceSway = $prop('AccelerationSway');\t// lateral (yaw) \r\n  var gForceSurge = $prop('GlobalAccelerationG');\t// deceleration\r\n  var gForceHeave = $prop('AccelerationHeave');\r\n  if ($prop('DataCorePlugin.CurrentGame') == \"CodemastersDirtRally2\")\r\n  \tgForceHeave = $prop('ShakeITMotorsV3Plugin.Export.jumpLanding.All')*-.1;\r\n  \r\n\r\n  var masterGain = $prop('Settings.master_gain') / 10;\r\n\r\n  gForceSway *= ($prop('Settings.yaw_gain') / 10) * masterGain;\r\n  gForceSurge *= ($prop('Settings.decel_gain') / 10) * masterGain;\r\n  gForceHeave *= ($prop('Settings.heave_gain') / 10) * masterGain;\r\n\r\n\r\n  // if (0 > gforce_y)\r\n  //   gforce_y = 0;\t\t\t\t// non-negative deceleration\r\n\r\n\r\n  var lsVal = 0;\r\n  var rsVal = 0;\r\n  var lwVal = 0;\r\n  var rwVal = 0;\r\n\r\n  var rs = 0;\r\n  var ls = 0;\r\n  var rw = 0;\r\n  var lw = 0;\r\n\r\n  var beltForces = {\r\n    ls: [],\r\n    rs: [],\r\n    lw: [],\r\n    rw: []\r\n  }\r\n\r\n  var combineForces = function (arr) {\r\n    //return avg(arr);\r\n    var bestValue = 0;\r\n\r\n    arr.forEach(function (val) {\r\n      if (Math.abs(val) > Math.abs(bestValue))\r\n        bestValue = val;\r\n    });\r\n    return bestValue;\r\n  }\r\n\r\n  var avg = function (arr) {\r\n    if (arr.length > 0) {\r\n      var total = 0;\r\n\r\n      arr.forEach(function (val) {\r\n        total += val;\r\n      });\r\n\r\n      return total / arr.length;\r\n    }\r\n    else\r\n      return 0;\r\n  }\r\n\r\n  var positiveSurgeMultiplier = 2;//1.5\r\n\r\n  if (gForceSurge > 0)\r\n    gForceSurge *= positiveSurgeMultiplier;\r\n\r\n  beltForces.ls.push(gForceSurge);\r\n  beltForces.rs.push(gForceSurge);\r\n  if (gForceSurge < 0) {\r\n    beltForces.lw.push(Math.abs(gForceSurge))\r\n    beltForces.rw.push(Math.abs(gForceSurge))\r\n  }\r\n\r\n  var shoulderSwayMultiplier = .25\r\n  if (gForceSway < 0) {\r\n    beltForces.lw.push(gForceSway * -1);\r\n    beltForces.ls.push(gForceSway * -1 * shoulderSwayMultiplier);\r\n  }\r\n  else {\r\n    beltForces.rw.push(gForceSway);\r\n    beltForces.rs.push(gForceSway * shoulderSwayMultiplier);\r\n  }\r\n\r\n  beltForces.lw.push(-1 * gForceHeave);\r\n  beltForces.rw.push(-1 * gForceHeave);\r\n\r\n  ls = combineForces(beltForces.ls);\r\n  rs = combineForces(beltForces.rs);\r\n  lw = combineForces(beltForces.lw);\r\n  rw = combineForces(beltForces.rw);\r\n\r\n  // Normalize to a value between 0 and 1\r\n  rsVal = rs / 2000;\r\n  lsVal = ls / 2000;\r\n  rwVal = rw / 2000;\r\n  lwVal = lw / 2000;\r\n\r\n  //return lsVal.toString()+\",\"+lwVal.toString()+\",\"+rwVal.toString()+\",\"+rsVal.toString()\r\n\r\n\r\n\r\n\r\n  //return rsVal;\r\n\r\n  // // Assign values to belts\r\n  // // TODO: recombine the values the way you really want them. For now just put heave to waist for test\r\n  // lsVal = l;\r\n  // rsVal = r;\r\n\r\n\r\n  lsVal = SmoothItOut(\"ls\", lsVal);\r\n  rsVal = SmoothItOut(\"rs\", rsVal);\r\n  lwVal = SmoothItOut(\"lw\", lwVal);\r\n  rwVal = SmoothItOut(\"rw\", rwVal);\r\n\r\n\r\n  lsVal = ApplyMaxMin(utils.lsMin, utils.lsMax, lsVal);\r\n  rsVal = ApplyMaxMin(utils.rsMin, utils.rsMax, rsVal);\r\n  lwVal = ApplyMaxMin(utils.lwMin, utils.lwMax, lwVal);\r\n  rwVal = ApplyMaxMin(utils.rwMin, utils.rwMax, rwVal);\r\n\r\n  var concatCommand = utils.concatCommand;\r\n  var getCommandValFromAbs = utils.getCommandValFromAbs;\r\n  var applyNeutralOffset = utils.applyNeutralOffset;\r\n\r\n  var command = \"\";\r\n\r\n\r\n  if (!$prop('Settings.useShoulder')) {\r\n    lsVal = 0;\r\n    rsVal = 0;\r\n  }\r\n  if (!$prop('Settings.useWaist')) {\r\n    lwVal = 0;\r\n    rwVal = 0;\r\n  }\r\n  command = concatCommand(command, utils.ctlCodes.leftShoulder, getCommandValFromAbs(applyNeutralOffset(utils.lsnPos, lsVal)));\r\n  command = concatCommand(command, utils.ctlCodes.rightShoulder, getCommandValFromAbs(applyNeutralOffset(utils.rsnPos, rsVal)));\r\n  command = concatCommand(command, utils.ctlCodes.leftWaist, getCommandValFromAbs(applyNeutralOffset(utils.lwnPos, lwVal)));\r\n  command = concatCommand(command, utils.ctlCodes.rightWaist, getCommandValFromAbs(applyNeutralOffset(utils.rwnPos, rwVal)));\r\n\r\n  return command;\r\n}\r\n\r\nfunction SetNeutralPositionsCommands(){\r\n  command = utils.concatCommand(command, utils.ctlCodes.leftShoulderNeutral, utils.getCommandValFromAbs(utils.lsnPos));\r\n  command = utils.concatCommand(command, utils.ctlCodes.rightShoulderNeutral, utils.getCommandValFromAbs(utils.rsnPos));\r\n  command = utils.concatCommand(command, utils.ctlCodes.leftWaistNeutral, utils.getCommandValFromAbs(utils.lwnPos));\r\n  command = utils.concatCommand(command, utils.ctlCodes.rightWaistNeutral, utils.getCommandValFromAbs(utils.rwnPos));\r\n  root['leftShoulderNeutral']= utils.lsnPos;\r\n  root['rightShoulderNeutral']= utils.rsnPos;\r\n  root['leftWaistNeutral']= utils.lwnPos;\r\n  root['rightWaistNeutral']= utils.rwnPos;\r\n  return command;\r\n}\r\n\r\nfunction ApplyNeutralPosition(){\r\n  command = utils.concatCommand(command, utils.ctlCodes.leftShoulder, utils.getCommandValFromAbs(utils.lsnPos));\r\n  command = utils.concatCommand(command, utils.ctlCodes.rightShoulder, utils.getCommandValFromAbs(utils.rsnPos));\r\n  command = utils.concatCommand(command, utils.ctlCodes.leftWaist, utils.getCommandValFromAbs(utils.lwnPos));\r\n  command = utils.concatCommand(command, utils.ctlCodes.rightWaist, utils.getCommandValFromAbs(utils.rwnPos));\r\n  return command;\r\n}\r\n\r\nfunction runInit(){\r\n  root['init']=true;\r\n  return SetNeutralPositionsCommands();\r\n}\r\n\r\nif (root['init'] !=true)\r\n  return runInit();\r\nelse if (root['leftShoulderNeutral']!= utils.lsnPos || root['rightShoulderNeutral']!= utils.rsnPos || root['leftWaistNeutral']!= utils.lwnPos || root['rightWaistNeutral']!= utils.rwnPos){\r\n  root['init']=false;\r\n  return \"\";\r\n} else if ($prop('Settings.TestMaxTensions')) {\r\n  command = utils.concatCommand(command, utils.ctlCodes.leftShoulder, utils.getCommandValFromAbs(utils.getMaxTensionPos(utils.lsnPos, utils.lsMax)));\r\n  command = utils.concatCommand(command, utils.ctlCodes.rightShoulder, utils.getCommandValFromAbs(utils.getMaxTensionPos(utils.rsnPos, utils.rsMax)));\r\n  command = utils.concatCommand(command, utils.ctlCodes.leftWaist, utils.getCommandValFromAbs(utils.getMaxTensionPos(utils.lwnPos, utils.lwMax)));\r\n  command = utils.concatCommand(command, utils.ctlCodes.rightWaist, utils.getCommandValFromAbs(utils.getMaxTensionPos(utils.rwnPos, utils.rwMax)));\r\n  return command;\r\n}else if ($prop('Settings.TestMinTensions')) {\r\n  command = utils.concatCommand(command, utils.ctlCodes.leftShoulder, utils.getCommandValFromAbs(utils.getMinTensionPos(utils.lsnPos, utils.lsMin)));\r\n  command = utils.concatCommand(command, utils.ctlCodes.rightShoulder, utils.getCommandValFromAbs(utils.getMinTensionPos(utils.rsnPos, utils.rsMin)));\r\n  command = utils.concatCommand(command, utils.ctlCodes.leftWaist, utils.getCommandValFromAbs(utils.getMinTensionPos(utils.lwnPos, utils.lwMin)));\r\n  command = utils.concatCommand(command, utils.ctlCodes.rightWaist, utils.getCommandValFromAbs(utils.getMinTensionPos(utils.rwnPos, utils.rwMin)));\r\n  return command;\r\n}if ($prop('Settings.TestNeutralTensions')) {\r\n  return ApplyNeutralPosition();\r\n}else if ($prop('DataCorePlugin.GameRunning')!=0){\r\n  if (root['limitFound'] != true){\r\n    command = command.concat(String.fromCharCode(utils.ctlCodes.control));\r\n    command = command.concat(String.fromCharCode(utils.ctlCodes.findTheLimitsCtl));\r\n    root['limitFound'] = true;\r\n    return command;\r\n  }else\r\n    return GetGForceCommand();\r\n}else{\r\n  root['limitFound'] = false;\r\n  return ApplyNeutralPosition();\r\n}\r\n"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 10
+    }
+  ],
+  "OnConnectMessage": {
+    "Interpreter": 1,
+    "Expression": "var utils = GetTensionUtils();\r\n\r\nroot['init'] = false;\r\n\r\n/*\r\nroot['leftShoulderNeutral']= 0;\r\nroot['rightShoulderNeutral']= 0;\r\nroot['leftWaistNeutral']= 0;\r\nroot['rightWaistNeutral']= 0;\r\n*/\r\nreturn \"\";"
+  },
+  "OnDisconnectMessage": {
+    "Expression": ""
+  },
+  "DtrEnable": true,
+  "RtsEnable": false,
+  "EditorExpanded": true,
+  "Name": "Custom Serial device",
+  "Description": "Four Servo Belt Tensioner",
+  "LastErrorDate": "2023-01-14T22:54:11.4835619-05:00",
+  "LastErrorMessage": null,
+  "IsFreezed": false,
+  "SettingsBuilder": {
+    "Settings": [
+      {
+        "Settings": [
+          {
+            "Maximum": 100,
+            "Minimum": 0,
+            "PropertyName": "LeftShoulderNeutral",
+            "CurrentValue": 35,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Left Shoulder",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 100,
+            "Minimum": 0,
+            "PropertyName": "RightShoulderNeutral",
+            "CurrentValue": 30,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Right Shoulder",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 100,
+            "Minimum": 0,
+            "PropertyName": "LeftWaistNeutral",
+            "CurrentValue": 25,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Left Waist",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 100,
+            "Minimum": 0,
+            "PropertyName": "RightWaistNeutral",
+            "CurrentValue": 25,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "RightWaist",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "PropertyName": "TestNeutralTensions",
+            "CurrentValue": false,
+            "Name": null,
+            "TypeName": "BoolEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Test Neutral Tensions",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          }
+        ],
+        "Name": null,
+        "TypeName": "GroupEntry",
+        "IsEnabled": true,
+        "IsEnabledFormula": {
+          "Expression": ""
+        },
+        "IsVisible": true,
+        "Label": "Neutral Tension Settings",
+        "IsVisibleFormula": {
+          "Expression": ""
+        }
+      },
+      {
+        "Settings": [
+          {
+            "Maximum": 100,
+            "Minimum": 0,
+            "PropertyName": "LeftShoulderMax",
+            "CurrentValue": 100,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Left Shoulder",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 100,
+            "Minimum": 0,
+            "PropertyName": "RightShoulderMax",
+            "CurrentValue": 100,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Right Shoulder",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 100,
+            "Minimum": 0,
+            "PropertyName": "LeftWaistMax",
+            "CurrentValue": 100,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Left Waist",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 100,
+            "Minimum": 0,
+            "PropertyName": "RightWaistMax",
+            "CurrentValue": 100,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Right Waist",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "PropertyName": "TestMaxTensions",
+            "CurrentValue": false,
+            "Name": null,
+            "TypeName": "BoolEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Test Maximum Tensions",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          }
+        ],
+        "Name": null,
+        "TypeName": "GroupEntry",
+        "IsEnabled": true,
+        "IsEnabledFormula": {
+          "Expression": ""
+        },
+        "IsVisible": true,
+        "Label": "Maximum Tension Settings",
+        "IsVisibleFormula": {
+          "Expression": ""
+        }
+      },
+      {
+        "Settings": [
+          {
+            "Maximum": 100,
+            "Minimum": 0,
+            "PropertyName": "LeftShoulderMin",
+            "CurrentValue": 100,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Left Shoulder",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 100,
+            "Minimum": 0,
+            "PropertyName": "RightShoulderMin",
+            "CurrentValue": 100,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Right Shoulder",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 100,
+            "Minimum": 0,
+            "PropertyName": "LeftWaistMin",
+            "CurrentValue": 100,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Left Waist",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 100,
+            "Minimum": 0,
+            "PropertyName": "RightWaistMin",
+            "CurrentValue": 100,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "RightWaist",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "PropertyName": "TestMinTensions",
+            "CurrentValue": false,
+            "Name": null,
+            "TypeName": "BoolEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Test Minimum Tensions",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          }
+        ],
+        "Name": null,
+        "TypeName": "GroupEntry",
+        "IsEnabled": true,
+        "IsEnabledFormula": {
+          "Expression": ""
+        },
+        "IsVisible": true,
+        "Label": "Minimum Tension Settings",
+        "IsVisibleFormula": {
+          "Expression": ""
+        }
+      },
+      {
+        "Settings": [
+          {
+            "Maximum": 11,
+            "Minimum": 0,
+            "PropertyName": "master_gain",
+            "CurrentValue": 10,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Overall Gain",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 11,
+            "Minimum": 0,
+            "PropertyName": "decel_gain",
+            "CurrentValue": 10,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Surge Gain",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 11,
+            "Minimum": 0,
+            "PropertyName": "yaw_gain",
+            "CurrentValue": 11,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Sway Gain",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 11,
+            "Minimum": 0,
+            "PropertyName": "heave_gain",
+            "CurrentValue": 10,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Heave Gain",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "Maximum": 4,
+            "Minimum": 0,
+            "PropertyName": "smooth",
+            "CurrentValue": 0,
+            "Name": null,
+            "TypeName": "SliderEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Smoothing",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "PropertyName": "useWaist",
+            "CurrentValue": true,
+            "Name": null,
+            "TypeName": "BoolEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Enable Waist Servos",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          },
+          {
+            "PropertyName": "useShoulder",
+            "CurrentValue": true,
+            "Name": null,
+            "TypeName": "BoolEntry",
+            "IsEnabled": true,
+            "IsEnabledFormula": {
+              "Expression": ""
+            },
+            "IsVisible": true,
+            "Label": "Enable Shoulder Servos",
+            "IsVisibleFormula": {
+              "Expression": ""
+            }
+          }
+        ],
+        "Name": null,
+        "TypeName": "GroupEntry",
+        "IsEnabled": true,
+        "IsEnabledFormula": {
+          "Expression": ""
+        },
+        "IsVisible": true,
+        "Label": "Sim Settings",
+        "IsVisibleFormula": {
+          "Expression": ""
+        }
+      }
+    ],
+    "IsEditMode": false
+  }
+}
