@@ -40,7 +40,7 @@ CurrentMonitor::CurrentMonitor(int nbServos, int* currentSensorPins, double curr
 void CurrentMonitor::setup() {
   for (int i = 0; i < _nbServos; i++) {
     pinMode(_currentSensorPins[i], INPUT);
-    Serial.println("i: "+(String)i+", pin: "+(String)_currentSensorPins[i]+", Input: "+(String)INPUT);   
+    //Serial.println("i: "+(String)i+", pin: "+(String)_currentSensorPins[i]+", Input: "+(String)INPUT));   
   }
   delay(1000);
   calibrateSensors();
@@ -50,7 +50,7 @@ void CurrentMonitor::loop() {
   long delta = monitorTimeDelta();
   
   if (msSinceMeasure >= measureInterval){
-    // Serial.println("msSinceMeasure: "+(String)msSinceMeasure+", delta: "+(String)delta);
+    // Serial.println(F("msSinceMeasure: "+(String)msSinceMeasure+", delta: "+(String)delta);
 
     long oldMsSinceMeasure = msSinceMeasure;
     this->msSinceMeasure = 0;
@@ -91,7 +91,7 @@ void CurrentMonitor::updateDurations(long durationDelta){
       }
       if ( _overCurrentDurations[i] > _maxTimeout){
         _sensorsFunctioningProperly=false;
-        Serial.println("Servo "+(String)i+" has been overCurrent for "+(String)_overCurrentDurations[i]+"ms, over the limit of "+(String)_maxTimeout+"ms. NO BUENO.");
+        Serial.println((String)i+" OC "+(String)_overCurrentDurations[i]+"ms");
         return;
       }    
     }
@@ -117,12 +117,15 @@ void CurrentMonitor::nominalCheck() {
 
 void CurrentMonitor::printAmps(bool forcePrint) {
   if (_shouldPrintAmps || forcePrint) {
-    Serial.print("Max_Amps:"+(String)_currentThreshold);
+    Serial.print(F("Max_Amps:"));
+    Serial.print((String)_currentThreshold);
     for (int i = 0; i < _nbServos; i++) {
-      Serial.print(",Amps_" + (String)i + ":");
+      Serial.print(F(",Amps_"));
+      Serial.print((String)i);
+      Serial.print(F(":"));
       Serial.print(_amps[i]);
     }
-    Serial.println("");
+    Serial.println(F(""));
   }  
 }
 
@@ -142,7 +145,7 @@ long CurrentMonitor::monitorTimeDelta() {
 }
 
 void CurrentMonitor::calibrateSensors(){
-  Serial.println("Calibrating Sensors...");
+  Serial.println(F("Calibrating Sensors..."));
   calculateAmpsRaw(150);
   String msg="Result";
   for(int i = 0; i < _nbServos; i++) {
@@ -157,11 +160,15 @@ void CurrentMonitor::calculateAmps() {
   for(int i = 0; i < _nbServos; i++) {
     _amps[i] = (_amps[i]-_sensorOffsets[i])+_fakeCurrentOffset[i];
     if ((String)_amps[i] == "ovf"){
-      Serial.println("Amp "+(String)i+" is reporting ovf. Not good.");
+      Serial.print(F("Amp "));
+      Serial.print((String)i);
+      Serial.println(F(" is reporting ovf. Not good."));
       _sensorsFunctioningProperly=false;
     }
     if (_amps[i]>=_maxCurrent){
-       Serial.println("Amp "+(String)i+" is over the max current of "+(String)_maxCurrent+" reporting "+(String)_amps[i]+". VERY BAD.");
+       Serial.print(F("Amp "));
+       Serial.print((String)i);
+       Serial.print(F(" is over the max current"));//+(String)_maxCurrent+" reporting "+(String)_amps[i]+". VERY BAD."));
       _sensorsFunctioningProperly=false;
     }
   }
@@ -183,7 +190,7 @@ void CurrentMonitor::calculateAmpsRaw(int numSamples){
       double AcsValue = analogRead(_currentSensorPins[i]);     //Read current sensor values   
       if (AcsValue<maxValue){
         Samples[i] = Samples[i] + AcsValue;  //Add samples together 
-        //Serial.println(("AcsValue[i] "+(String)i+" - "+(String)AcsValue));
+        //Serial.println(F(("AcsValue[i] "+(String)i+" - "+(String)AcsValue));
       }
     }
     delay(3);
@@ -251,7 +258,7 @@ void CurrentMonitor::fakeCurrentAction(long delta){
 void CurrentMonitor::incrementFakeCurrentDecrementTimeout(long stepSize){
   _fakeCurrentDecrementTimeout+=stepSize;
   for(int i=0; i<3; i++){
-    Serial.println("FakeCurrentTimeout:"+(String)((double)_fakeCurrentDecrementTimeout/1000));
+    //Serial.println(F("FakeCurrentTimeout:"+(String)((double)_fakeCurrentDecrementTimeout/1000)));
     delay(100);
   }
 }

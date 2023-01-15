@@ -5,9 +5,9 @@
 //LEDFunctions leds;
 
 bool shouldDebug = false;
-bool testMode=true;
-bool shouldPrintNominal = true;
-bool shouldPrintAmps = true;
+bool testMode=false;
+bool shouldPrintNominal = false;
+bool shouldPrintAmps = false;
 bool currentAutocorrectEnabled = true;
 const byte testStepSize=10;
 
@@ -221,7 +221,7 @@ void performCycleTest(){
 
 
 void performTest(byte buffer){
-  Debug("In Test Mode. Got buffer "+(String)buffer);
+  //Debug("In Test Mode. Got buffer "+(String)buffer);
   int servo=-1;
   int val=-1;
   if (buffer == abc.q || buffer == abc.a || buffer == abc.z || buffer == abc.u)
@@ -305,13 +305,13 @@ void loop()
       return;
 
     if (isAbove127 == true){        
-        Debug("Got a Buffer: "+(String)bufferCurrent+" isAbove127 is set. New Value: "+(String)(bufferCurrent + 128));
+        //Debug("Got a Buffer: "+(String)bufferCurrent+" isAbove127 is set. New Value: "+(String)(bufferCurrent + 128));
         bufferCurrent += 128;
         isAbove127 = false;
     }
 
     if (bufferCurrent == above127Ctl){
-        Debug("Got a control character: "+(String)bufferCurrent+". Setting Above 127 to true");
+        //Debug("Got a control character: "+(String)bufferCurrent+". Setting Above 127 to true");
         isAbove127 = true;
     }else if (bufferCurrent == controlCtl){
       expectControl =true;
@@ -324,11 +324,11 @@ void loop()
           return;
         currentServoIndex=tempServo;
         expectServoValue=true;
-        Debug("Got a control character: "+(String)bufferCurrent+", currentServoIndex: "+(String)currentServoIndex);
+        //Debug("Got a control character: "+(String)bufferCurrent+", currentServoIndex: "+(String)currentServoIndex);
       } else if (bufferCurrent >= setRedLeftCtl && bufferCurrent <= setBlueRightCtl){
         expectRGBValue = true;
         currentColorIndex = bufferCurrent-setRedLeftCtl;
-        Debug("Got a control character: "+(String)bufferCurrent+", currentColorIndex: "+(String)currentColorIndex);
+        //Debug("Got a control character: "+(String)bufferCurrent+", currentColorIndex: "+(String)currentColorIndex);
       } else if (bufferCurrent >= leftShoulderNeutralCtl && bufferCurrent <= rightWaistNeutralCtl){
         currentServoIndex = bufferCurrent-leftShoulderNeutralCtl;
         expectNeutralValue=true;
@@ -343,17 +343,17 @@ void loop()
       bufferCurrent -= (255-maxVal); 
       if (expectServoValue){  
         expectServoValue=false;     
-        Debug("Got a value. Gonna set servo: "+(String)currentServoIndex+" to "+(String)bufferCurrent);
+        //Debug("Got a value. Gonna set servo: "+(String)currentServoIndex+" to "+(String)bufferCurrent);
         
         if (abs(OldSerialValue[currentServoIndex] - bufferCurrent) > deadZone) {
           MoveServoToByteValue(currentServoIndex, bufferCurrent);
         }
       }else if (expectRGBValue){
-        Debug("Got a value. Gonna set LED: "+(String)currentColorIndex+" to "+(String)bufferCurrent);
+        //Debug("Got a value. Gonna set LED: "+(String)currentColorIndex+" to "+(String)bufferCurrent);
         expectRGBValue = false;
         //leds.SetColorLevel(currentColorIndex,bufferCurrent);
       }else if (expectNeutralValue){
-        Debug("Got a NEUTRAL value. Gonna set servo neutral value: "+(String)currentServoIndex+" to "+(String)bufferCurrent);
+        //Debug("Got a NEUTRAL value. Gonna set servo neutral value: "+(String)currentServoIndex+" to "+(String)bufferCurrent);
         servoNeutralDegrees[currentServoIndex] = mapByteValueToDegrees(currentServoIndex, bufferCurrent);
       }
     }
@@ -398,13 +398,12 @@ void findTheLimitAction(long delta){
     limitMsElapsed+=delta;
     bool servoMoved = false;
     if (limitMsSinceIncrement>= overCurrentDelay){
-      Debug("Its been "+(String)limitMsSinceIncrement);//+"ms since last moving. gonna try to move."));
+      //Debug("Its been "+(String)limitMsSinceIncrement);//+"ms since last moving. gonna try to move."));
       limitMsSinceIncrement=0;
       for(int i=0; i<nbServos; i++){
         bool boolTest =(servoCurrentMaxDegrees[i] == 0 && intendedDegrees[i] < servoEndDegrees[i]);
-        Debug((String)i+": "+(String)servoCurrentMaxDegrees[i]+", "+(String)intendedDegrees[i]+", "+(String)servoEndDegrees[i]+", "+(String)boolTest);
+        //Debug((String)i+": "+(String)servoCurrentMaxDegrees[i]+", "+(String)intendedDegrees[i]+", "+(String)servoEndDegrees[i]+", "+(String)boolTest);
         if(servoCurrentMaxDegrees[i] == 0 && intendedDegrees[i] < servoEndDegrees[i]){
-          Debug("Move "+(String)i);
           moveServoToDegrees(i, intendedDegrees[i]+overCurrentDegreeDelta);
           servoMoved = true;
         }
@@ -414,10 +413,10 @@ void findTheLimitAction(long delta){
         for(int i=0; i<nbServos; i++){
           msg=(String)i+": "+(String)servoCurrentMaxDegrees[i]+", ";
         }
-        Debug("limit found");// has been found! It is "+msg+"\n Going to attempt to move to the neutral position now");
+        //Debug("limit found");// has been found! It is "+msg+"\n Going to attempt to move to the neutral position now");
         findingTheLimit=false;
         for(int i=0; i<nbServos; i++){
-          Debug((String)i+" Neutral: "+(String)servoNeutralDegrees[i]+", ");
+          //Debug((String)i+" Neutral: "+(String)servoNeutralDegrees[i]+", ");
           //moveServoToDegrees(i, servoNeutralDegrees[i]);
           moveAllServosToNeutral();
         }
@@ -432,7 +431,7 @@ void resetCurrentDegrees(){
     servoCurrentMaxDegrees[i]=0;
     servoCurrentMinDegrees[i]=0;
   }        
-  Debug("Min and Max current values reset");
+  Debug(F("Min and Max current values reset"));
 }
 
 bool servoCheck(){
@@ -460,32 +459,32 @@ bool monitorCurrents(long delta){
         if (!servoIsEnabled(i))
           continue;
         if (!nominal[i]){
-          Debug("Not Nominal: "+String(i));
+          //Debug("Not Nominal: "+String(i));
           notNominal=true;
           wasntNominal=true;
           int newDegrees = intendedDegrees[i];
           if (newDegrees == servoNeutralDegrees[i] ||
           (newDegrees > servoNeutralDegrees[i] && newDegrees-overCurrentDegreeDelta < servoNeutralDegrees[i]) ||
           (newDegrees < servoNeutralDegrees[i] && newDegrees+overCurrentDegreeDelta > servoNeutralDegrees[i])){
-            Serial.println("Neutral Position is too close to over current. Shutting down");
+            Serial.println(F("Neutral Position is too close to over current. Shutting down"));
             criticalShutdown=true;
             neutralCausedShutdown=true;
             return;
           }
           if (newDegrees> servoNeutralDegrees[i]){
             newDegrees -=overCurrentDegreeDelta;
-            Debug("Too far. New Degrees: "+(String)newDegrees);
+            //Debug("Too far. New Degrees: "+(String)newDegrees);
             servoCurrentMaxDegrees[i]= newDegrees;
           }else{
             newDegrees+=overCurrentDegreeDelta;
-            Debug("Too close. New Degrees: "+(String)newDegrees);
+            //Debug("Too close. New Degrees: "+(String)newDegrees);
             servoCurrentMinDegrees[i]=newDegrees;
           }
           moveServoToDegrees(i,newDegrees);
         }
       }
       if(notNominal){
-        Debug("Not Nominal. Gonna wait "+(String)overCurrentDelay+"ms before checking again");
+        //Debug("Not Nominal. Gonna wait ")+(String)overCurrentDelay+F("ms before checking again"));
         delay(overCurrentDelay);
         nominal = _currentMonitor->onDemandOverCurrentCheck(overCurrentDelay);
         long newDelta = timeDelta();        
@@ -493,7 +492,7 @@ bool monitorCurrents(long delta){
       }
     }while(notNominal && servoCheck());
     if (wasntNominal){
-      Debug("Wasn't Nominal, but AG now!!!");
+      Debug(F("Wasn't Nominal, but AG now!!!"));
       delay(postNotNominalDelay);
     }
   }
@@ -506,7 +505,7 @@ void printNominal(bool* nominal, long delta){
     if (shouldPrintNominal){
       for(byte i=0; i<nbServos; i++){      
         if (i>0)
-          Serial.print(",");
+          Serial.print(F(","));
         Serial.print("Nominal_"+(String)i+":");
         Serial.print(nominal[i]);
       }
@@ -533,7 +532,7 @@ void MoveServoToByteValue(byte servoID, int val )
 {
   OldSerialValue[servoID] = val;
   int targetDegrees = mapByteValueToDegrees(servoID,val);
-  Debug("Attempting to move servo "+(String)servoID+" to val "+(String)val+" at targetDegrees "+(String)targetDegrees);
+  //Debug("Attempting to move servo "+(String)servoID+" to val "+(String)val+" at targetDegrees "+(String)targetDegrees);
 
   int neutralDegrees =servoNeutralDegrees[servoID];
   if (neutralDegrees!=0){
@@ -541,20 +540,23 @@ void MoveServoToByteValue(byte servoID, int val )
     if (targetDegrees < neutralDegrees){
       if (servoCurrentMinDegrees[servoID]!=0){        
         newDegrees = map(targetDegrees,servoHomeDegrees[servoID], neutralDegrees, servoCurrentMinDegrees[servoID],neutralDegrees);
-        Debug("targetDegrees is below neutralDegrees. Mapped "+(String)targetDegrees+" to "+(String)newDegrees);
-      }else
-        Debug("targetDegrees is below neutralDegrees, but... servoCurrentMinDegrees[servoID] == "+(String)servoCurrentMinDegrees[servoID]);
+        //Debug("targetDegrees is below neutralDegrees. Mapped "+(String)targetDegrees+" to "+(String)newDegrees);
+      }else{
+        //Debug("targetDegrees is below neutralDegrees, but... servoCurrentMinDegrees[servoID] == "+(String)servoCurrentMinDegrees[servoID]);
+      }
     }
     else{
       if (servoCurrentMaxDegrees[servoID]!=0){
         newDegrees = map(targetDegrees, neutralDegrees, servoEndDegrees[servoID], neutralDegrees, servoCurrentMaxDegrees[servoID]);
-        Debug("targetDegrees is above neutralDegrees. Mapped "+(String)targetDegrees+" to "+(String)newDegrees);
-      }else
-        Debug("targetDegrees is above neutralDegrees, but... servoCurrentMaxDegrees[servoID] == "+(String)servoCurrentMaxDegrees[servoID]);
+        //Debug("targetDegrees is above neutralDegrees. Mapped "+(String)targetDegrees+" to "+(String)newDegrees);
+      }else{
+        //Debug("targetDegrees is above neutralDegrees, but... servoCurrentMaxDegrees[servoID] == "+(String)servoCurrentMaxDegrees[servoID]);
+      }
     }
     targetDegrees = newDegrees;
-  }else
-    Debug("Neutral Degrees is zero. no need to map anything");
+  }else{
+    //Debug("Neutral Degrees is zero. no need to map anything");
+  }
 
   moveServoToDegrees(servoID, targetDegrees);
 }
