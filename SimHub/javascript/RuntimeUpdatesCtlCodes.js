@@ -22,7 +22,7 @@ function ApplyMaxMin(val, minVal, maxVal) {
     return val * minVal;
 }
 
-function GetGForceCommand(){
+function GetGForceCommand() {
 
   // G-forces from SimHub properties
   /*
@@ -34,8 +34,8 @@ function GetGForceCommand(){
   var gForceSurge = $prop('GlobalAccelerationG');	// deceleration
   var gForceHeave = $prop('AccelerationHeave');
   if ($prop('DataCorePlugin.CurrentGame') == "CodemastersDirtRally2")
-  	gForceHeave = $prop('ShakeITMotorsV3Plugin.Export.jumpLanding.All')*-.1;
-  
+    gForceHeave = $prop('ShakeITMotorsV3Plugin.Export.jumpLanding.All') * -.1;
+
 
   var masterGain = $prop('Settings.master_gain') / 10;
 
@@ -173,19 +173,19 @@ function GetGForceCommand(){
   return command;
 }
 
-function SetNeutralPositionsCommands(){
+function SetNeutralPositionsCommands() {
   command = utils.concatCommand(command, utils.ctlCodes.leftShoulderNeutral, utils.getCommandValFromAbs(utils.lsnPos));
   command = utils.concatCommand(command, utils.ctlCodes.rightShoulderNeutral, utils.getCommandValFromAbs(utils.rsnPos));
   command = utils.concatCommand(command, utils.ctlCodes.leftWaistNeutral, utils.getCommandValFromAbs(utils.lwnPos));
   command = utils.concatCommand(command, utils.ctlCodes.rightWaistNeutral, utils.getCommandValFromAbs(utils.rwnPos));
-  root['leftShoulderNeutral']= utils.lsnPos;
-  root['rightShoulderNeutral']= utils.rsnPos;
-  root['leftWaistNeutral']= utils.lwnPos;
-  root['rightWaistNeutral']= utils.rwnPos;
+  root['leftShoulderNeutral'] = utils.lsnPos;
+  root['rightShoulderNeutral'] = utils.rsnPos;
+  root['leftWaistNeutral'] = utils.lwnPos;
+  root['rightWaistNeutral'] = utils.rwnPos;
   return command;
 }
 
-function ApplyNeutralPosition(){
+function ApplyNeutralPosition() {
   command = utils.concatCommand(command, utils.ctlCodes.leftShoulder, utils.getCommandValFromAbs(utils.lsnPos));
   command = utils.concatCommand(command, utils.ctlCodes.rightShoulder, utils.getCommandValFromAbs(utils.rsnPos));
   command = utils.concatCommand(command, utils.ctlCodes.leftWaist, utils.getCommandValFromAbs(utils.lwnPos));
@@ -193,15 +193,16 @@ function ApplyNeutralPosition(){
   return command;
 }
 
-function runInit(){
-  root['init']=true;
+function runInit() {
+  root['init'] = true;
+  root['limitFound'] = false;
   return SetNeutralPositionsCommands();
 }
 
-if (root['init'] !=true)
+if (root['init'] != true)
   return runInit();
-else if (root['leftShoulderNeutral']!= utils.lsnPos || root['rightShoulderNeutral']!= utils.rsnPos || root['leftWaistNeutral']!= utils.lwnPos || root['rightWaistNeutral']!= utils.rwnPos){
-  root['init']=false;
+else if (root['leftShoulderNeutral'] != utils.lsnPos || root['rightShoulderNeutral'] != utils.rsnPos || root['leftWaistNeutral'] != utils.lwnPos || root['rightWaistNeutral'] != utils.rwnPos) {
+  root['init'] = false;
   return "";
 } else if ($prop('Settings.TestMaxTensions')) {
   command = utils.concatCommand(command, utils.ctlCodes.leftShoulder, utils.getCommandValFromAbs(utils.getMaxTensionPos(utils.lsnPos, utils.lsMax)));
@@ -209,23 +210,24 @@ else if (root['leftShoulderNeutral']!= utils.lsnPos || root['rightShoulderNeutra
   command = utils.concatCommand(command, utils.ctlCodes.leftWaist, utils.getCommandValFromAbs(utils.getMaxTensionPos(utils.lwnPos, utils.lwMax)));
   command = utils.concatCommand(command, utils.ctlCodes.rightWaist, utils.getCommandValFromAbs(utils.getMaxTensionPos(utils.rwnPos, utils.rwMax)));
   return command;
-}else if ($prop('Settings.TestMinTensions')) {
+} else if ($prop('Settings.TestMinTensions')) {
   command = utils.concatCommand(command, utils.ctlCodes.leftShoulder, utils.getCommandValFromAbs(utils.getMinTensionPos(utils.lsnPos, utils.lsMin)));
   command = utils.concatCommand(command, utils.ctlCodes.rightShoulder, utils.getCommandValFromAbs(utils.getMinTensionPos(utils.rsnPos, utils.rsMin)));
   command = utils.concatCommand(command, utils.ctlCodes.leftWaist, utils.getCommandValFromAbs(utils.getMinTensionPos(utils.lwnPos, utils.lwMin)));
   command = utils.concatCommand(command, utils.ctlCodes.rightWaist, utils.getCommandValFromAbs(utils.getMinTensionPos(utils.rwnPos, utils.rwMin)));
   return command;
-}if ($prop('Settings.TestNeutralTensions')) {
+} if ($prop('Settings.TestNeutralTensions')) {
   return ApplyNeutralPosition();
-}else if ($prop('DataCorePlugin.GameRunning')!=0){
-  if (root['limitFound'] != true){
+} else if ($prop('DataCorePlugin.GameRunning') != 0) {
+  if (root['limitFound'] != true) {
     command = command.concat(String.fromCharCode(utils.ctlCodes.control));
     command = command.concat(String.fromCharCode(utils.ctlCodes.findTheLimitsCtl));
     root['limitFound'] = true;
     return command;
-  }else
+  } else
     return GetGForceCommand();
-}else{
-  root['limitFound'] = false;
+} else {
+  if ($prop('Settings.forceCalibration'))
+    root['limitFound'] = false;
   return ApplyNeutralPosition();
 }

@@ -5,12 +5,21 @@
 //LEDFunctions leds;
 
 bool shouldDebug = false;
-bool testMode=true;
-bool initialAngleTest = false;
+bool testMode=false;
 bool shouldPrintNominal = false;
-bool shouldPrintAmps = true;
+bool shouldPrintAmps = false;
 bool currentAutocorrectEnabled = true;
+bool initialAngleTest = false;
 const byte testStepSize=10;
+byte suspendNeutralShutdown = 0;
+
+double _currentThreshold = 3.0;
+double _maxCurrent = 4.0;
+long _overCurrentTimeout = 100;
+long _maxOverCurrentTimeout = 2000;
+int overCurrentDegreeDelta = 3;
+long overCurrentDelay=200;
+long postNotNominalDelay = 100;
 
 const byte nbServos = 4;
 
@@ -48,17 +57,17 @@ bool isAbove127 = false;
 // create servo objects to control any servo
 Servo myServo[nbServos];
 const byte servoPin[nbServos] =  {10,8,7,4};//{4,7,2,8};  // digital pins (not necessarily ~pwm)
-const bool inversion[nbServos] = {false,false,false,false}; // parameter to change if a servo goes the wrong way
+const bool inversion[nbServos] = {true,true,false,false}; // parameter to change if a servo goes the wrong way
 int OldSerialValue[nbServos] = {0, 0, 0, 0};
 int intendedDegrees[nbServos] = {0, 0, 0, 0};
 
 // servo span:
-int servoHomeDegrees[nbServos] = { 5, 5, 5, 5}; //will be updated with the initial pressure measurement
-int servoEndDegrees[nbServos] = { 170,170,170,170}; // leftthigh, rightthigh, leftside, rightside
+int servoHomeDegrees[nbServos] = { 25, 25, 5, 15}; //will be updated with the initial pressure measurement
+int servoEndDegrees[nbServos] = { 175,175,170,175}; // leftthigh, rightthigh, leftside, rightside
 int currentServoIndex = 0;
 
 int servoNativeDegrees[nbServos] = { 360,360,270,270}; 
-int servoRotationOffsetDegrees[nbServos] = {135,135,90,90}; 
+int servoRotationOffsetDegrees[nbServos] = {90,90,90,90}; 
 bool useRotationOffset = true;
 
 int servoNeutralDegrees[nbServos] = {60,60,60,60};
@@ -82,18 +91,14 @@ bool expectNeutralValue = false;
 long previousTime=0;
 
 CurrentMonitor* _currentMonitor;
-double _currentThreshold = 2.5;
-double _maxCurrent = 5.0;
-long _overCurrentTimeout = 200;
-long _maxOverCurrentTimeout = 2000;
-int overCurrentDegreeDelta = 3;
-long overCurrentDelay=100;
-long postNotNominalDelay = 100;
+
 
 bool findingTheLimit = false;
 //long limitTimeoutMs=(180/overCurrentDegreeDelta)*overCurrentDelay+(overCurrentDelay*4)+_overCurrentTimeout;
 long limitMsElapsed=0;
 long limitMsSinceIncrement=0;
+byte limitServos=0;
+int limitDelay = _overCurrentTimeout*1.25;
 
 int nominalInterval = 100;
 int msSinceNominal = 0;
@@ -254,6 +259,7 @@ void moveServoToNeutral(int servoId){
 
 void findTheLimit(){
   findingTheLimit=true;
+  limitServos=0;
   resetCurrentDegrees();
   moveAllServosToNeutral();
   delay(1000);
@@ -262,31 +268,44 @@ void findTheLimit(){
 
 void findTheLimitAction(long delta){
   if (findingTheLimit){
+    byte limitStep =4;
     limitMsSinceIncrement+=delta;
     limitMsElapsed+=delta;
     bool servoMoved = false;
-    if (limitMsSinceIncrement>= overCurrentDelay){
-      //Debug("Its been "+(String)limitMsSinceIncrement);//+"ms since last moving. gonna try to move."));
-      limitMsSinceIncrement=0;
-      for(int i=0; i<nbServos; i++){
-        bool boolTest =(servoCurrentMaxDegrees[i] == 0 && intendedDegrees[i] < servoEndDegrees[i]);
-        //Debug((String)i+": "+(String)servoCurrentMaxDegrees[i]+", "+(String)intendedDegrees[i]+", "+(String)servoEndDegrees[i]+", "+(String)boolTest);
-        if(servoCurrentMaxDegrees[i] == 0 && intendedDegrees[i] < servoEndDegrees[i]){
-          moveServoToDegrees(i, intendedDegrees[i]+overCurrentDegreeDelta);
-          servoMoved = true;
+    if (limitMsSinceIncrement>= limitDelay){
+      if (suspendNeutralShutdown == 0){
+        //Debug("Its been "+(String)limitMsSinceIncrement);//+"ms since last moving. gonna try to move."));
+        limitMsSinceIncrement=0;
+        for(int i=limitServos; i<min(limitServos+limitStep,nbServos); i++){
+          if (servoIsEnabled(i)){            
+            if(servoCurrentMaxDegrees[i] == 0 && intendedDegrees[i] < servoEndDegrees[i]){
+              moveServoToDegrees(i, intendedDegrees[i]+overCurrentDegreeDelta);
+              servoMoved = true;
+            }
+          }
         }
-      }
-      if(servoMoved==false){
-        String msg = "";
-        for(int i=0; i<nbServos; i++){
-          msg=(String)i+": "+(String)servoCurrentMaxDegrees[i]+", ";
-        }
-        //Debug("limit found");// has been found! It is "+msg+"\n Going to attempt to move to the neutral position now");
-        findingTheLimit=false;
-        for(int i=0; i<nbServos; i++){
-          //Debug((String)i+" Neutral: "+(String)servoNeutralDegrees[i]+", ");
-          //moveServoToDegrees(i, servoNeutralDegrees[i]);
+        if(servoMoved==false){
+          limitServos+=limitStep;
+          if (limitServos>=nbServos){
+            Debug(F("limit found"));// has been found! It is "+msg+"\n Going to attempt to move to the neutral position now");  
+            if (testMode){                        
+              String msg = "";
+              for(int i=0; i<nbServos; i++){
+                msg=(String)i+": "+(String)servoCurrentMaxDegrees[i]+", ";
+              }
+              Serial.print(F("Limit has been found! It is "));
+              Serial.println(msg);
+            }                       
+            suspendNeutralShutdown=1;     
+          }
           moveAllServosToNeutral();
+        }
+      }else{
+        // This is to cause a slight delay after finding the limit to allow the currents to settle back down.
+        suspendNeutralShutdown++;
+        if (suspendNeutralShutdown>3){
+          suspendNeutralShutdown=0;
+          findingTheLimit=false;
         }
       }
     }
@@ -316,6 +335,9 @@ bool monitorCurrents(long delta){
   if (!servoCheck())
     return;
   
+  if (suspendNeutralShutdown >0)
+    return;
+
   bool* nominal = _currentMonitor->isEverythingNominal();
   printNominal(nominal,delta);
   bool notNominal = false;
@@ -327,14 +349,16 @@ bool monitorCurrents(long delta){
         if (!servoIsEnabled(i))
           continue;
         if (!nominal[i]){
-          //Debug("Not Nominal: "+String(i));
+          
           notNominal=true;
           wasntNominal=true;
           int newDegrees = intendedDegrees[i];
+          Debug("Not Nominal: "+String(i)+" - "+(String)newDegrees);
           if (newDegrees == servoNeutralDegrees[i] ||
           (newDegrees > servoNeutralDegrees[i] && newDegrees-overCurrentDegreeDelta < servoNeutralDegrees[i]) ||
           (newDegrees < servoNeutralDegrees[i] && newDegrees+overCurrentDegreeDelta > servoNeutralDegrees[i])){
-            Serial.println(F("Neutral Position is too close to over current. Shutting down"));
+            //Serial.println(F("Neutral Position is too close to over current. Shutting down"));
+            Serial.println("Neutral Position "+(String)i+" - "+(String)servoNeutralDegrees[i]+" is to close to overcurrent found at "+(String)newDegrees+". Shutting down");
             criticalShutdown=true;
             neutralCausedShutdown=true;
             return;

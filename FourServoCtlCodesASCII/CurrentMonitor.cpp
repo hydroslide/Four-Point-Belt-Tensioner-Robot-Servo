@@ -168,7 +168,10 @@ void CurrentMonitor::calculateAmps() {
     if (_amps[i]>=_maxCurrent){
        Serial.print(F("Amp "));
        Serial.print((String)i);
-       Serial.print(F(" is over the max current"));//+(String)_maxCurrent+" reporting "+(String)_amps[i]+". VERY BAD."));
+       Serial.print(F(" is over the max current"));
+       Serial.print((String)_maxCurrent);
+       Serial.print(F(" reporting "));
+      Serial.println((String)_amps[i]);//+". VERY BAD."));
       _sensorsFunctioningProperly=false;
     }
   }
