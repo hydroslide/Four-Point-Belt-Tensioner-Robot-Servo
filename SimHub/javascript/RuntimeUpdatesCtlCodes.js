@@ -43,9 +43,9 @@ function GetGForceCommand() {
   gForceSurge *= ($prop('Settings.decel_gain') / 10) * masterGain;
   gForceHeave *= ($prop('Settings.heave_gain') / 10) * masterGain;
 
+  if ($prop('DataCorePlugin.CurrentGame') == "AssettoCorsaCompetizione")
+    gForceSway *= 1.5
 
-  // if (0 > gforce_y)
-  //   gforce_y = 0;				// non-negative deceleration
 
 
   var lsVal = 0;
@@ -173,6 +173,19 @@ function GetGForceCommand() {
   return command;
 }
 
+function checkForLimit() {
+  if (!$prop('Settings.forceCalibrationNow')) {
+    root['calibrationForced'] = false;
+  }
+  if (root['limitFound'] != true) {
+    command = command.concat(String.fromCharCode(utils.ctlCodes.control));
+    command = command.concat(String.fromCharCode(utils.ctlCodes.findTheLimitsCtl));
+    root['limitFound'] = true;
+    return command;
+  } else
+    return null;
+}
+
 function SetNeutralPositionsCommands() {
   command = utils.concatCommand(command, utils.ctlCodes.leftShoulderNeutral, utils.getCommandValFromAbs(utils.lsnPos));
   command = utils.concatCommand(command, utils.ctlCodes.rightShoulderNeutral, utils.getCommandValFromAbs(utils.rsnPos));
@@ -218,16 +231,25 @@ else if (root['leftShoulderNeutral'] != utils.lsnPos || root['rightShoulderNeutr
   return command;
 } if ($prop('Settings.TestNeutralTensions')) {
   return ApplyNeutralPosition();
+} else if ($prop('Settings.forceCalibrationNow')) {
+  if (root['calibrationForced'] != true) {
+    root['limitFound'] = false;
+    root['calibrationForced'] = true;
+  }
+  return "Must Force Calibration";
 } else if ($prop('DataCorePlugin.GameRunning') != 0) {
-  if (root['limitFound'] != true) {
-    command = command.concat(String.fromCharCode(utils.ctlCodes.control));
-    command = command.concat(String.fromCharCode(utils.ctlCodes.findTheLimitsCtl));
-    root['limitFound'] = true;
-    return command;
-  } else
+  var limitCommand = checkForLimit();
+  if (limitCommand)
+    return limitCommand
+  else
     return GetGForceCommand();
 } else {
-  if ($prop('Settings.forceCalibration'))
-    root['limitFound'] = false;
-  return ApplyNeutralPosition();
+  var limitCommand = checkForLimit()
+  if (limitCommand)
+    return limitCommand
+  else {
+    if ($prop('Settings.forceCalibration'))
+      root['limitFound'] = false;
+    return ApplyNeutralPosition();
+  }
 }

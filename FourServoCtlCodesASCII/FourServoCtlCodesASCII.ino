@@ -15,7 +15,7 @@ byte suspendNeutralShutdown = 0;
 
 double _currentThreshold = 3.0;
 double _maxCurrent = 4.0;
-long _overCurrentTimeout = 100;
+long _overCurrentTimeout = 30;
 long _maxOverCurrentTimeout = 2000;
 int overCurrentDegreeDelta = 3;
 long overCurrentDelay=200;
