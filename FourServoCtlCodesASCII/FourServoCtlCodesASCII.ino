@@ -12,14 +12,22 @@ bool currentAutocorrectEnabled = true;
 bool initialAngleTest = false;
 const byte testStepSize=10;
 byte suspendNeutralShutdown = 0;
+bool autoResetCutoffsAfterCooldown = true;
+bool autoRestartAfterShutdown = true;
 
-double _currentThreshold = 3.0;
-double _maxCurrent = 4.0;
+const double _stallCurrent = 4.0;
+double _currentThreshold = _stallCurrent * .75;
+double _maxCurrent = _stallCurrent * 1.125;
 long _overCurrentTimeout = 30;
 long _maxOverCurrentTimeout = 2000;
 int overCurrentDegreeDelta = 3;
 long overCurrentDelay=200;
 long postNotNominalDelay = 100;
+long overCurrentCoolDownDelay = 15000;
+long deltaSinceLastOverCurrent = 0;
+long criticalShutdownRestartDelay = 15000;
+long deltaSinceShutdown = 0;
+
 
 const byte nbServos = 4;
 
@@ -72,7 +80,8 @@ bool useRotationOffset = true;
 
 int servoNeutralDegrees[nbServos] = {60,60,60,60};
 int servoCurrentMinDegrees[nbServos] = { 0, 0, 0, 0}; //Based on known physical restrictions in available range of movement.
-int servoCurrentMaxDegrees[nbServos] = { 0,0,0,0};
+int servoCurrentMaxDegrees[nbServos] = {  0, 0, 0, 0};
+int servoCurrentCutoffDegrees[nbServos] = { 180,180,180,180};
 
 const int currentSensorPins[nbServos] = {A0,A1,A2,A3};
 
@@ -113,11 +122,7 @@ void setup()
 
   _currentMonitor->setup();
 
-  // attach the Servos to the pins
-  for (byte i = 0; i < nbServos; i++) {
-    // pinMode(servoPin[i], OUTPUT); // done within the library
-    myServo[i].attach(servoPin[i],500,2500);  // attaches the servo on servoPin pin
-    }
+  attachServos();
 
   if (initialAngleTest)
     return;
@@ -137,16 +142,18 @@ void setup()
 
 void loop()
 {
+  long delta = timeDelta();
   if (criticalShutdown){
     if (!shutdownInitiated)
       performShutdown();
+    restartAfterShutdownCheck(delta);
     return;
   }
 
   if (initialAngleTest)
     return;
 
-  long delta = timeDelta();
+  
 
   findTheLimitAction(delta);
 
@@ -224,6 +231,30 @@ void loop()
     serial_flush();
 
   loopCycle(delta);
+}
+
+void attachServos(){
+   // attach the Servos to the pins
+  for (byte i = 0; i < nbServos; i++) {
+    // pinMode(servoPin[i], OUTPUT); // done within the library
+    myServo[i].attach(servoPin[i],500,2500);  // attaches the servo on servoPin pin
+    }
+}
+
+void restartAfterShutdownCheck(long delta){
+  deltaSinceShutdown+=delta;
+  if (deltaSinceShutdown>=criticalShutdownRestartDelay){
+    deltaSinceShutdown=0;
+    if (autoRestartAfterShutdown){
+      Serial.println(F("Auto Restarting after Critical Shutdown!"));      
+      _currentMonitor->resetServoFunctionality();
+      criticalShutdown = false;
+      shutdownInitiated = false;
+      neutralCausedShutdown = false;
+      attachServos();
+      findTheLimit();
+    }
+  }
 }
 
 
@@ -316,6 +347,7 @@ void findTheLimitAction(long delta){
 void resetCurrentDegrees(){
   for (int i=0; i<nbServos; i++){
     servoCurrentMaxDegrees[i]=0;
+    servoCurrentCutoffDegrees[i] =180;
     servoCurrentMinDegrees[i]=0;
   }        
   Debug(F("Min and Max current values reset"));
@@ -343,13 +375,14 @@ bool monitorCurrents(long delta){
   bool notNominal = false;
   bool wasntNominal = false;
   if (currentAutocorrectEnabled){
+    deltaSinceLastOverCurrent+=delta;
     do{
       notNominal = false;
       for(int i=0; i<nbServos; i++){
         if (!servoIsEnabled(i))
           continue;
         if (!nominal[i]){
-          
+          deltaSinceLastOverCurrent=0;
           notNominal=true;
           wasntNominal=true;
           int newDegrees = intendedDegrees[i];
@@ -366,7 +399,10 @@ bool monitorCurrents(long delta){
           if (newDegrees> servoNeutralDegrees[i]){
             newDegrees -=overCurrentDegreeDelta;
             //Debug("Too far. New Degrees: "+(String)newDegrees);
-            servoCurrentMaxDegrees[i]= newDegrees;
+            if (findingTheLimit)
+              servoCurrentMaxDegrees[i]= newDegrees;
+            else
+              servoCurrentCutoffDegrees[i]= newDegrees;
           }else{
             newDegrees+=overCurrentDegreeDelta;
             //Debug("Too close. New Degrees: "+(String)newDegrees);
@@ -387,8 +423,22 @@ bool monitorCurrents(long delta){
       Debug(F("Wasn't Nominal, but AG now!!!"));
       delay(postNotNominalDelay);
     }
+    OverCurrentCooldownCheck();
   }
   return wasntNominal;
+}
+
+void OverCurrentCooldownCheck(){
+  if (deltaSinceLastOverCurrent >= overCurrentCoolDownDelay){
+    deltaSinceLastOverCurrent=0;
+    if (autoResetCutoffsAfterCooldown){
+      for(int i=0; i<nbServos; i++){
+        if (servoCurrentCutoffDegrees[i] < servoCurrentMaxDegrees[i]){
+          servoCurrentCutoffDegrees[i]+=overCurrentDegreeDelta;
+        }
+      }
+    }
+  }
 }
 
 void printNominal(bool* nominal, long delta){
@@ -440,6 +490,9 @@ void MoveServoToByteValue(byte servoID, int val )
     else{
       if (servoCurrentMaxDegrees[servoID]!=0){
         newDegrees = map(targetDegrees, neutralDegrees, servoEndDegrees[servoID], neutralDegrees, servoCurrentMaxDegrees[servoID]);
+        byte cutoffDegrees = servoCurrentCutoffDegrees[servoID];
+        if (newDegrees>cutoffDegrees)
+          newDegrees=cutoffDegrees;
         //Debug("targetDegrees is above neutralDegrees. Mapped "+(String)targetDegrees+" to "+(String)newDegrees);
       }else{
         //Debug("targetDegrees is above neutralDegrees, but... servoCurrentMaxDegrees[servoID] == "+(String)servoCurrentMaxDegrees[servoID]);

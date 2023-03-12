@@ -30,7 +30,7 @@ function GetGForceCommand() {
   var gforce_y = $prop('ShakeITMotorsV3Plugin.Export.DecelGforce.Front') - $prop('ShakeITMotorsV3Plugin.Export.AccelGforce.Rear')// 
   var gforce_z = 0;//
   */
-  var gForceSway = $prop('AccelerationSway');	// lateral (yaw) 
+  var gForceSway = $prop('AccelerationSway')*2.65;//1.75;	// lateral (yaw) 
   var gForceSurge = $prop('GlobalAccelerationG');	// deceleration
   var gForceHeave = $prop('AccelerationHeave');
   if ($prop('DataCorePlugin.CurrentGame') == "CodemastersDirtRally2")
@@ -43,8 +43,8 @@ function GetGForceCommand() {
   gForceSurge *= ($prop('Settings.decel_gain') / 10) * masterGain;
   gForceHeave *= ($prop('Settings.heave_gain') / 10) * masterGain;
 
-  if ($prop('DataCorePlugin.CurrentGame') == "AssettoCorsaCompetizione")
-    gForceSway *= 1.5
+  //if ($prop('DataCorePlugin.CurrentGame') == "AssettoCorsaCompetizione")
+  //  gForceSway *= 1.5
 
 
 

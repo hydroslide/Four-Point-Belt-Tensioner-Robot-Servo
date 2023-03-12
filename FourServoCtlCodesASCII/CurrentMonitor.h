@@ -14,6 +14,7 @@ public:
   bool isFunctioningProperly();
   void incrementFakeCurrent(int servoId, double stepSize);  
   void incrementFakeCurrentDecrementTimeout(long stepSize);
+  void resetServoFunctionality();
   
 
 private:

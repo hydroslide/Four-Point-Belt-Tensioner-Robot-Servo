@@ -74,6 +74,10 @@ bool CurrentMonitor::isFunctioningProperly(){
   return _sensorsFunctioningProperly;
 }
 
+void  CurrentMonitor::resetServoFunctionality(){
+  _sensorsFunctioningProperly=true;
+}
+
 bool* CurrentMonitor::isEverythingNominal() {
     
   for(int i = 0; i < _nbServos; i++) {
