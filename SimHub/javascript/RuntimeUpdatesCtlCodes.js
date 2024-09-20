@@ -36,6 +36,11 @@ function GetGForceCommand() {
   if ($prop('DataCorePlugin.CurrentGame') == "CodemastersDirtRally2")
     gForceHeave = $prop('ShakeITMotorsV3Plugin.Export.jumpLanding.All') * -.1;
 
+if ($prop('DataCorePlugin.CurrentGame') == 'WRC10'){
+	gForceSurge*=-1
+	gForceSway*=-1
+	gForceHeave*=-1
+}
 
   var masterGain = $prop('Settings.master_gain') / 10;
 
